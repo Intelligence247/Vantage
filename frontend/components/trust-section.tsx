@@ -21,11 +21,12 @@ export function TrustSection() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <h2 className="font-heading text-2xl sm:text-3xl lg:text-4xl font-bold text-primary tracking-tight text-balance">
+          <span className="text-orange-600 font-semibold text-sm uppercase tracking-wider">Our Commitment</span>
+          <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mt-4 tracking-tight mb-6">
             Setting the Standard for Nigerian Real Estate
           </h2>
-          <p className="text-secondary mt-4 text-lg max-w-2xl mx-auto">
-            Trusted by government agencies and industry leaders across Nigeria
+          <p className="text-gray-600 text-lg leading-relaxed max-w-3xl mx-auto">
+            We are redefining the property market with transparency, technology, and trust.
           </p>
 
           {/* Partner Logos */}

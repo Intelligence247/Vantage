@@ -114,10 +114,13 @@ export function PropertiesSection() {
           className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-12"
         >
           <div>
-            <span className="text-accent font-semibold text-sm uppercase tracking-wider">Featured Listings</span>
+            <span className="text-orange-600 font-semibold text-sm uppercase tracking-wider">Featured Listings</span>
             <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mt-4 tracking-tight">
-              Premium Properties
+              Discover Your Dream Home
             </h2>
+            <p className="text-gray-600 mt-4 text-lg max-w-2xl mx-auto">
+              Explore our handpicked selection of premium properties, verified for quality and value.
+            </p>
           </div>
           <button className="self-start sm:self-auto border-2 border-primary text-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary hover:text-primary-foreground transition-all duration-200 active:scale-[0.98]">
             View All Properties
@@ -175,7 +178,7 @@ export function PropertiesSection() {
                 <h3 className="font-heading text-lg font-bold text-primary mb-2 line-clamp-1">{property.title}</h3>
 
                 {/* Location */}
-                <div className="flex items-center gap-1.5 text-secondary text-sm mb-4">
+                <div className="flex items-center gap-1.5 text-gray-600 text-sm mb-4">
                   <MapPin className="w-4 h-4" />
                   <span>{property.location}</span>
                 </div>
@@ -183,16 +186,16 @@ export function PropertiesSection() {
                 {/* Features */}
                 <div className="flex items-center gap-4 pt-4 border-t border-border">
                   {property.beds > 0 && (
-                    <div className="flex items-center gap-1.5 text-secondary text-sm">
+                    <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                       <Bed className="w-4 h-4" />
                       <span>{property.beds} Beds</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 text-secondary text-sm">
+                  <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                     <Bath className="w-4 h-4" />
                     <span>{property.baths} Baths</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-secondary text-sm">
+                  <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                     <Square className="w-4 h-4" />
                     <span>{property.sqft}</span>
                   </div>

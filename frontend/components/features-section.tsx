@@ -60,11 +60,11 @@ export function FeaturesSection() {
           transition={{ duration: 0.5 }}
           className="text-center max-w-2xl mx-auto mb-16"
         >
-          <span className="text-accent font-semibold text-sm uppercase tracking-wider">Why Choose Us</span>
+          <span className="text-orange-600 font-semibold text-sm uppercase tracking-wider">Why Choose Us</span>
           <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-primary mt-4 tracking-tight text-balance">
             Built for Trust, Designed for Excellence
           </h2>
-          <p className="text-secondary mt-4 text-lg leading-relaxed">
+          <p className="text-gray-600 mt-4 text-lg leading-relaxed">
             We combine cutting-edge technology with rigorous verification to deliver a property experience like no
             other.
           </p>
@@ -90,7 +90,7 @@ export function FeaturesSection() {
                 <feature.icon className="w-7 h-7" />
               </div>
               <h3 className="font-heading text-xl font-bold text-primary mb-3">{feature.title}</h3>
-              <p className="text-secondary leading-relaxed">{feature.description}</p>
+              <p className="text-gray-600 leading-relaxed">{feature.description}</p>
             </motion.div>
           ))}
         </motion.div>
