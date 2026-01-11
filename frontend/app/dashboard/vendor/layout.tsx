@@ -10,11 +10,11 @@ import { LayoutGrid, Building2, MessageSquare, BarChart3, Settings, LogOut, Menu
 import { Button } from "@/components/ui/button"
 
 const navLinks = [
-  { name: "Overview", href: "/dashboard", icon: LayoutGrid },
-  { name: "My Properties", href: "/dashboard/properties", icon: Building2 },
-  { name: "Inbox", href: "/dashboard/inbox", icon: MessageSquare, badge: 3 },
-  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Overview", href: "/dashboard/vendor", icon: LayoutGrid },
+  { name: "My Properties", href: "/dashboard/vendor/properties", icon: Building2 },
+  { name: "Inbox", href: "/dashboard/vendor/inbox", icon: MessageSquare, badge: 3 },
+  { name: "Analytics", href: "/dashboard/vendor/analytics", icon: BarChart3 },
+  { name: "Settings", href: "/dashboard/vendor/settings", icon: Settings },
 ]
 
 export default function DashboardLayout({
@@ -26,7 +26,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard"
+    if (href === "/dashboard/vendor") return pathname === "/dashboard/vendor"
     return pathname.startsWith(href)
   }
 
@@ -34,7 +34,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background">
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-primary h-16 flex items-center justify-between px-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/dashboard/vendor" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
             <span className="font-heading font-bold text-primary text-sm">V</span>
           </div>
