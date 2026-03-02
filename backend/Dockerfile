@@ -36,6 +36,9 @@ RUN addgroup -g 1001 -S nestjs && \
 
 WORKDIR /app
 
+# Create logs directory with correct ownership
+RUN mkdir -p /app/logs && chown -R nestjs:nestjs /app/logs
+
 # Copy built application from builder stage
 COPY --from=builder --chown=nestjs:nestjs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nestjs /app/node_modules ./node_modules
