@@ -46,6 +46,15 @@ export const createPropertySchema = z.object({
     )
     .optional()
     .default([]),
+  images: z
+    .array(
+      z.object({
+        url: z.string(),
+        publicId: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
@@ -104,6 +113,12 @@ export class CreatePropertyDto {
 
   @ApiPropertyOptional({ example: 'yearly' })
   paymentPeriod?: string;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    example: [{ url: 'https://res.cloudinary.com/...', publicId: 'abc123_xyz' }],
+  })
+  images?: { url: string; publicId: string }[];
 }
 
 export const updatePropertySchema = createPropertySchema.partial();
