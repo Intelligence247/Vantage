@@ -7,6 +7,7 @@ import { Heart, Calendar, MessageSquare, Search, MapPin, Bed, Bath, Maximize, Ar
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/context/AuthContext"
 
 const stats = [
   {
@@ -89,6 +90,8 @@ const itemVariants = {
 }
 
 export default function BuyerDashboardOverview() {
+  const { user } = useAuth()
+  
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -98,7 +101,7 @@ export default function BuyerDashboardOverview() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8"
       >
         <div>
-          <h1 className="font-heading text-2xl lg:text-3xl font-bold text-foreground">Welcome back, Chidi</h1>
+          <h1 className="font-heading text-2xl lg:text-3xl font-bold text-foreground capitalize">Welcome back, {user?.name?.split(' ')[0] || 'Buyer'}</h1>
           <p className="text-muted-foreground mt-1">Find your next dream home today.</p>
         </div>
         <Link href="/properties">

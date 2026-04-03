@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { User, Bell, Shield, Camera, Trash2, Save, Mail, Phone } from "lucide-react"
@@ -10,14 +10,48 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAuth } from "@/context/AuthContext"
+import { userService } from "@/services/user.service"
+import { toast } from "sonner"
 
 export default function BuyerSettingsPage() {
+  const { user, checkAuth } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+  })
+
+  useEffect(() => {
+    if (user) {
+      const parts = user.name?.split(" ") || []
+      setFormData({
+        firstName: parts[0] || "",
+        lastName: parts.slice(1).join(" ") || "",
+        email: user.email || "",
+        phone: (user as any).phone || "",
+      })
+    }
+  }, [user])
 
   const handleSave = async () => {
-    setIsSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSaving(false)
+    try {
+      setIsSaving(true)
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim()
+      await userService.updateProfile({
+        name: fullName,
+        phone: formData.phone,
+      })
+      await checkAuth()
+      toast.success("Profile updated successfully")
+    } catch (error) {
+      console.error("Failed to update profile:", error)
+      toast.error("Failed to update profile")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -57,7 +91,7 @@ export default function BuyerSettingsPage() {
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
-                        <span className="font-heading font-bold text-3xl text-muted-foreground">B</span>
+                        <span className="font-heading font-bold text-3xl text-muted-foreground uppercase">{user?.name?.[0] || 'B'}</span>
                     </div>
                     <Button
                       size="icon"
@@ -67,8 +101,8 @@ export default function BuyerSettingsPage() {
                     </Button>
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Buyer Name</p>
-                    <p className="text-sm text-muted-foreground">Verified User</p>
+                    <p className="font-medium text-foreground capitalize">{user?.name || "Buyer Name"}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{user?.role || "User"}</p>
                     <Button variant="outline" size="sm" className="mt-2 bg-transparent">
                       Change Photo
                     </Button>
@@ -87,11 +121,21 @@ export default function BuyerSettingsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" defaultValue="Tunde" className="mt-1.5" />
+                    <Input 
+                        id="firstName" 
+                        value={formData.firstName} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                        className="mt-1.5" 
+                    />
                   </div>
                   <div>
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" defaultValue="Bakare" className="mt-1.5" />
+                    <Input 
+                        id="lastName" 
+                        value={formData.lastName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))} 
+                        className="mt-1.5" 
+                    />
                   </div>
                 </div>
                 <div>
@@ -99,14 +143,25 @@ export default function BuyerSettingsPage() {
                     <Mail className="w-4 h-4 text-muted-foreground" />
                     Email Address
                   </Label>
-                  <Input id="email" type="email" defaultValue="tunde.bakare@email.com" className="mt-1.5" />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    value={formData.email} 
+                    disabled 
+                    className="mt-1.5 bg-muted/50" 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground" />
                     Phone Number
                   </Label>
-                  <Input id="phone" defaultValue="+234 809 123 4567" className="mt-1.5" />
+                  <Input 
+                    id="phone" 
+                    value={formData.phone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} 
+                    className="mt-1.5" 
+                  />
                 </div>
               </CardContent>
             </Card>

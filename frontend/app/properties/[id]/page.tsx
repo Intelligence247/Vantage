@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -33,65 +32,7 @@ import {
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 
-// Sample property data
-const propertyData = {
-  id: 1,
-  title: "Modern Luxury Villa with Panoramic Views",
-  location: "Victoria Island, Lagos",
-  address: "Plot 24, Adeola Odeku Street, Victoria Island, Lagos",
-  price: 450000000,
-  type: "For Sale",
-  beds: 5,
-  baths: 6,
-  sqft: 6500,
-  parking: 4,
-  yearBuilt: 2022,
-  has360Tour: true,
-  isVerified: true,
-  description: `This magnificent luxury villa represents the pinnacle of contemporary Nigerian architecture. Situated in the prestigious Victoria Island neighborhood, this property offers an unparalleled living experience with breathtaking panoramic views of the Lagos skyline.
-
-The residence features an open-plan design with floor-to-ceiling windows that flood the interior with natural light. The gourmet kitchen is equipped with top-of-the-line appliances and custom cabinetry. Each bedroom is generously sized with en-suite bathrooms featuring premium fixtures.
-
-The outdoor space includes a stunning infinity pool, landscaped gardens, and multiple entertainment areas perfect for hosting guests. Smart home technology is integrated throughout, allowing complete control of lighting, climate, and security systems.`,
-  features: [
-    "Smart Home Automation",
-    "Infinity Swimming Pool",
-    "Home Theater",
-    "Wine Cellar",
-    "Gym & Fitness Center",
-    "Staff Quarters",
-    "Backup Generator",
-    "Water Treatment System",
-    "CCTV Security System",
-    "Landscaped Gardens",
-    "Double Garage",
-    "Rooftop Terrace",
-  ],
-  images: [
-    "/modern-luxury-villa-lagos-nigeria.jpg",
-    "/luxury-villa-living-room-interior.jpg",
-    "/modern-kitchen-with-island-counter.jpg",
-    "/canyon-village-storage/image4.png",
-    "/infinity-pool-city.png",
-    "/luxurious-home-theater.png",
-  ],
-  agent: {
-    name: "Adebayo Okonkwo",
-    title: "Senior Property Consultant",
-    phone: "+234 802 345 6789",
-    email: "adebayo@vantage.ng",
-    image: "/professional-nigerian-real-estate-agent-portrait.jpg",
-    verified: true,
-    listings: 45,
-    experience: "8 years",
-  },
-  nearbyPlaces: [
-    { name: "Victoria Island Shopping Mall", distance: "0.5 km" },
-    { name: "Lagos Country Club", distance: "1.2 km" },
-    { name: "International School Lagos", distance: "2.0 km" },
-    { name: "EKO Hospital", distance: "1.8 km" },
-  ],
-}
+import { propertyService, Property } from "@/services/property.service"
 
 const amenityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   "Smart Home Automation": Zap,
@@ -113,19 +54,56 @@ export default function PropertyDetailPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isFavorite, setIsFavorite] = useState(false)
   const [showContactForm, setShowContactForm] = useState(false)
+  const [property, setProperty] = useState<Property | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const property = propertyData
+  useEffect(() => {
+    const fetchProperty = async () => {
+      try {
+        if (params.id) {
+          const data = await propertyService.getById(params.id as string)
+          setProperty(data)
+        }
+      } catch (error) {
+        console.error("Failed to load property details:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchProperty()
+  }, [params.id])
 
   const nextImage = () => {
+    if (!property?.images) return
     setCurrentImageIndex((prev) => (prev + 1) % property.images.length)
   }
 
   const prevImage = () => {
+    if (!property?.images) return
     setCurrentImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length)
   }
 
   const formatPrice = (price: number) => {
     return `₦${(price / 1000000).toFixed(0)}M`
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-20">
+        <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full"></div>
+      </div>
+    )
+  }
+
+  if (!property) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-20">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-primary mb-4">Property Not Found</h2>
+          <Link href="/properties" className="text-accent hover:underline">Return to listings</Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -156,7 +134,7 @@ export default function PropertyDetailPage() {
               {/* Main Image */}
               <div className="relative h-[400px] lg:h-[500px] rounded-2xl overflow-hidden">
                 <Image
-                  src={property.images[currentImageIndex] || "/placeholder.svg"}
+                  src={property.images?.[currentImageIndex]?.url || "/placeholder.svg"}
                   alt={property.title}
                   fill
                   className="object-cover"
@@ -180,19 +158,13 @@ export default function PropertyDetailPage() {
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
-                  <span className="px-4 py-2 bg-primary text-white rounded-full text-sm font-semibold">
-                    {property.type}
+                  <span className="px-4 py-2 bg-primary text-white rounded-full text-sm font-semibold capitalize">
+                    For {property.status}
                   </span>
-                  {property.has360Tour && (
-                    <span className="px-4 py-2 bg-white/90 backdrop-blur-sm rounded-full text-sm font-semibold text-primary flex items-center gap-2">
-                      <View className="w-4 h-4" />
-                      360° Tour Available
-                    </span>
-                  )}
-                  {property.isVerified && (
+                  {property.agent?.isVerified && (
                     <span className="px-4 py-2 bg-green-500 text-white rounded-full text-sm font-semibold flex items-center gap-2">
                       <Shield className="w-4 h-4" />
-                      Verified
+                      Verified Agent
                     </span>
                   )}
                 </div>
@@ -216,13 +188,13 @@ export default function PropertyDetailPage() {
 
                 {/* Image Counter */}
                 <div className="absolute bottom-4 right-4 px-4 py-2 bg-black/50 backdrop-blur-sm rounded-full text-white text-sm">
-                  {currentImageIndex + 1} / {property.images.length}
+                  {property.images?.length > 0 ? `${currentImageIndex + 1} / ${property.images.length}` : '0 / 0'}
                 </div>
               </div>
 
               {/* Thumbnail Strip */}
               <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
-                {property.images.map((img, index) => (
+                {property.images?.map((img, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentImageIndex(index)}
@@ -230,7 +202,7 @@ export default function PropertyDetailPage() {
                       currentImageIndex === index ? "ring-2 ring-accent ring-offset-2" : "opacity-70 hover:opacity-100"
                     }`}
                   >
-                    <Image src={img || "/placeholder.svg"} alt={`View ${index + 1}`} fill className="object-cover" />
+                    <Image src={img.url || "/placeholder.svg"} alt={`View ${index + 1}`} fill className="object-cover" />
                   </button>
                 ))}
               </div>
@@ -253,7 +225,7 @@ export default function PropertyDetailPage() {
                   <h1 className="font-heading text-3xl lg:text-4xl font-bold text-primary">{property.title}</h1>
                   <div className="flex items-center gap-2 mt-3 text-muted-foreground">
                     <MapPin className="w-5 h-5" />
-                    <span>{property.address}</span>
+                    <span>{property.location?.address}, {property.location?.city}, {property.location?.state}</span>
                   </div>
                   <p className="mt-4 text-3xl font-bold text-accent">{formatPrice(property.price)}</p>
                 </motion.div>
@@ -266,14 +238,14 @@ export default function PropertyDetailPage() {
                   className="grid grid-cols-2 sm:grid-cols-4 gap-4"
                 >
                   {[
-                    { icon: Bed, label: "Bedrooms", value: property.beds },
-                    { icon: Bath, label: "Bathrooms", value: property.baths },
-                    { icon: Square, label: "Square Feet", value: property.sqft.toLocaleString() },
-                    { icon: Car, label: "Parking", value: property.parking },
+                    { icon: Bed, label: "Bedrooms", value: property.bedrooms },
+                    { icon: Bath, label: "Bathrooms", value: property.bathrooms },
+                    { icon: Square, label: "Size", value: `${property.size || 0} ${property.sizeUnit || 'sqm'}` },
+                    { icon: Home, label: "Property Type", value: property.type },
                   ].map((stat, index) => (
                     <div key={index} className="bg-muted/30 rounded-xl p-4 text-center">
                       <stat.icon className="w-6 h-6 text-accent mx-auto" />
-                      <p className="mt-2 font-heading text-xl font-bold text-primary">{stat.value}</p>
+                      <p className="mt-2 font-heading text-xl font-bold text-primary capitalize">{stat.value}</p>
                       <p className="text-sm text-muted-foreground">{stat.label}</p>
                     </div>
                   ))}
@@ -305,7 +277,7 @@ export default function PropertyDetailPage() {
                 >
                   <h2 className="font-heading text-xl font-bold text-primary mb-6">Features & Amenities</h2>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {property.features.map((feature, index) => {
+                    {property.features?.map((feature, index) => {
                       const IconComponent = amenityIcons[feature] || Check
                       return (
                         <div key={index} className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
@@ -316,27 +288,6 @@ export default function PropertyDetailPage() {
                         </div>
                       )
                     })}
-                  </div>
-                </motion.div>
-
-                {/* Nearby Places */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.4 }}
-                  className="bg-white rounded-xl p-6 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)]"
-                >
-                  <h2 className="font-heading text-xl font-bold text-primary mb-6">Nearby Places</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {property.nearbyPlaces.map((place, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <MapPin className="w-5 h-5 text-accent" />
-                          <span className="font-medium text-primary">{place.name}</span>
-                        </div>
-                        <span className="text-sm text-muted-foreground">{place.distance}</span>
-                      </div>
-                    ))}
                   </div>
                 </motion.div>
               </div>
@@ -355,38 +306,34 @@ export default function PropertyDetailPage() {
                   <div className="flex items-center gap-4 mb-6">
                     <div className="relative w-16 h-16 rounded-full overflow-hidden">
                       <Image
-                        src={property.agent.image || "/placeholder.svg"}
-                        alt={property.agent.name}
+                        src={"/professional-nigerian-real-estate-agent-portrait.jpg"}
+                        alt={property.agent?.name || "Agent"}
                         fill
                         className="object-cover"
                       />
-                      {property.agent.verified && (
+                      {property.agent?.isVerified && (
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
                           <Check className="w-3 h-3 text-white" />
                         </div>
                       )}
                     </div>
                     <div>
-                      <h4 className="font-heading font-bold text-primary">{property.agent.name}</h4>
-                      <p className="text-sm text-muted-foreground">{property.agent.title}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-muted-foreground">{property.agent.listings} listings</span>
-                        <span className="text-xs text-muted-foreground">{property.agent.experience} exp</span>
-                      </div>
+                      <h4 className="font-heading font-bold text-primary">{property.agent?.name}</h4>
+                      <p className="text-sm text-muted-foreground">{property.agent?.email}</p>
                     </div>
                   </div>
 
                   {/* Contact Buttons */}
                   <div className="space-y-3">
                     <a
-                      href={`tel:${property.agent.phone}`}
+                      href={`tel:${property.agent?.phone || ''}`}
                       className="flex items-center justify-center gap-2 w-full bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-light transition-colors"
                     >
                       <Phone className="w-5 h-5" />
                       Call Agent
                     </a>
                     <a
-                      href={`https://wa.me/${property.agent.phone.replace(/\s/g, "")}`}
+                      href={`https://wa.me/${property.agent?.phone?.replace(/\s/g, "") || ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 w-full bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition-colors"
@@ -443,15 +390,11 @@ export default function PropertyDetailPage() {
                   <div className="mt-6 pt-6 border-t border-border">
                     <div className="flex items-center justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Property ID</span>
-                      <span className="font-medium text-primary">VTG-{property.id.toString().padStart(5, "0")}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Year Built</span>
-                      <span className="font-medium text-primary">{property.yearBuilt}</span>
+                      <span className="font-medium text-primary">{property._id?.substring(0, 8)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium text-primary">2 days ago</span>
+                      <span className="text-muted-foreground">Date Listed</span>
+                      <span className="font-medium text-primary">{new Date(property.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </motion.div>

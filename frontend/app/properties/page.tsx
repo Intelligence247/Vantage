@@ -1,164 +1,74 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Search, MapPin, Bed, Bath, Square, Heart, SlidersHorizontal, Grid3X3, List, View } from "lucide-react"
+import { Search, MapPin, Bed, Bath, Square, Heart, SlidersHorizontal, Grid3X3, List, View, Loader2 } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
+import { propertyService, Property, PaginatedProperties } from "@/services/property.service"
 
-const properties = [
-  {
-    id: 1,
-    title: "Modern Luxury Villa",
-    location: "Victoria Island, Lagos",
-    price: 450000000,
-    type: "For Sale",
-    beds: 5,
-    baths: 6,
-    sqft: 6500,
-    image: "/modern-luxury-villa-lagos-nigeria.jpg",
-    has360Tour: true,
-    isVerified: true,
-  },
-  {
-    id: 2,
-    title: "Contemporary Penthouse",
-    location: "Ikoyi, Lagos",
-    price: 320000000,
-    type: "For Sale",
-    beds: 4,
-    baths: 4,
-    sqft: 4200,
-    image: "/contemporary-penthouse-apartment-lagos.jpg",
-    has360Tour: true,
-    isVerified: true,
-  },
-  {
-    id: 3,
-    title: "Executive Duplex",
-    location: "Lekki Phase 1, Lagos",
-    price: 180000000,
-    type: "For Sale",
-    beds: 4,
-    baths: 5,
-    sqft: 3800,
-    image: "/executive-duplex-house-lekki-lagos.jpg",
-    has360Tour: false,
-    isVerified: true,
-  },
-  {
-    id: 4,
-    title: "Waterfront Mansion",
-    location: "Banana Island, Lagos",
-    price: 850000000,
-    type: "For Sale",
-    beds: 7,
-    baths: 8,
-    sqft: 12000,
-    image: "/waterfront-mansion-banana-island-lagos.jpg",
-    has360Tour: true,
-    isVerified: true,
-  },
-  {
-    id: 5,
-    title: "Smart Home Apartment",
-    location: "Eko Atlantic, Lagos",
-    price: 5500000,
-    type: "For Rent",
-    beds: 3,
-    baths: 3,
-    sqft: 2400,
-    image: "/smart-home-apartment-eko-atlantic-lagos.jpg",
-    has360Tour: true,
-    isVerified: false,
-  },
-  {
-    id: 6,
-    title: "Garden Terrace House",
-    location: "Maitama, Abuja",
-    price: 280000000,
-    type: "For Sale",
-    beds: 5,
-    baths: 5,
-    sqft: 5200,
-    image: "/garden-terrace-house-maitama-abuja.jpg",
-    has360Tour: false,
-    isVerified: true,
-  },
-  {
-    id: 7,
-    title: "Luxury Serviced Flat",
-    location: "Asokoro, Abuja",
-    price: 3200000,
-    type: "For Rent",
-    beds: 2,
-    baths: 2,
-    sqft: 1800,
-    image: "/luxury-serviced-flat-asokoro-abuja.jpg",
-    has360Tour: true,
-    isVerified: true,
-  },
-  {
-    id: 8,
-    title: "Colonial Style Estate",
-    location: "Old GRA, Port Harcourt",
-    price: 195000000,
-    type: "For Sale",
-    beds: 6,
-    baths: 6,
-    sqft: 7200,
-    image: "/colonial-style-estate-port-harcourt.jpg",
-    has360Tour: false,
-    isVerified: true,
-  },
-  {
-    id: 9,
-    title: "Beach View Condo",
-    location: "Oniru, Lagos",
-    price: 4800000,
-    type: "For Rent",
-    beds: 3,
-    baths: 3,
-    sqft: 2100,
-    image: "/beach-view-condo-oniru-lagos.jpg",
-    has360Tour: true,
-    isVerified: true,
-  },
-]
-
-const propertyTypes = ["All Types", "House", "Apartment", "Villa", "Penthouse", "Duplex", "Land"]
+const propertyTypes = ["All Types", "flat", "duplex", "bungalow", "mansion", "land"]
 const priceRanges = ["Any Price", "Under ₦50M", "₦50M - ₦100M", "₦100M - ₦300M", "₦300M - ₦500M", "Above ₦500M"]
 const bedOptions = ["Any Beds", "1+", "2+", "3+", "4+", "5+"]
 
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [showFilters, setShowFilters] = useState(false)
+  
+  // API State
+  const [propertiesData, setPropertiesData] = useState<PaginatedProperties | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  
+  // Filter States
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState("All Types")
   const [selectedPrice, setSelectedPrice] = useState("Any Price")
   const [selectedBeds, setSelectedBeds] = useState("Any Beds")
   const [listingType, setListingType] = useState<"all" | "sale" | "rent">("all")
-  const [favorites, setFavorites] = useState<number[]>([])
+  
+  const [favorites, setFavorites] = useState<string[]>([])
 
-  const toggleFavorite = (id: number) => {
+  const fetchProperties = async () => {
+    setIsLoading(true)
+    try {
+      // Map UI filters to backend query params
+      const filters: any = {}
+      if (searchQuery) filters.search = searchQuery
+      if (listingType !== "all") filters.status = listingType
+      if (selectedType !== "All Types") filters.type = selectedType
+      
+      if (selectedBeds !== "Any Beds") {
+        filters.beds = parseInt(selectedBeds.replace('+', ''))
+      }
+      
+      // Price parsing logic could go here based on ranges
+      
+      const data = await propertyService.getAll(filters)
+      setPropertiesData(data)
+    } catch (error) {
+      console.error("Failed to fetch properties:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Initial fetch and fetch on filter changes (excluding search query unless submitted)
+  useEffect(() => {
+    fetchProperties()
+  }, [listingType, selectedType, selectedBeds, selectedPrice])
+
+  const toggleFavorite = (id: string) => {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]))
   }
 
-  const formatPrice = (price: number, type: string) => {
-    if (type === "For Rent") {
-      return `₦${(price / 1000000).toFixed(1)}M/year`
+  const formatPrice = (price: number, currency: string) => {
+    if (price >= 1000000) {
+      return `${currency} ${(price / 1000000).toFixed(1)}M`
     }
-    return `₦${(price / 1000000).toFixed(0)}M`
+    return `${currency} ${price.toLocaleString()}`
   }
-
-  const filteredProperties = properties.filter((property) => {
-    if (listingType === "sale" && property.type !== "For Sale") return false
-    if (listingType === "rent" && property.type !== "For Rent") return false
-    if (searchQuery && !property.location.toLowerCase().includes(searchQuery.toLowerCase())) return false
-    return true
-  })
 
   return (
     <>
@@ -205,7 +115,9 @@ export default function PropertiesPage() {
                     <SlidersHorizontal className="w-5 h-5" />
                     <span className="font-medium">Filters</span>
                   </button>
-                  <button className="w-full md:w-auto bg-accent text-primary px-8 py-3 rounded-xl font-semibold hover:bg-accent-hover transition-colors">
+                  <button 
+                    onClick={fetchProperties}
+                    className="w-full md:w-auto bg-accent text-primary px-8 py-3 rounded-xl font-semibold hover:bg-accent-hover transition-colors">
                     Search
                   </button>
                 </div>
@@ -298,7 +210,7 @@ export default function PropertiesPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
               <div>
                 <h2 className="font-heading text-2xl font-bold text-primary">
-                  {filteredProperties.length} Properties Found
+                  {propertiesData?.total || 0} Properties Found
                 </h2>
                 <p className="text-muted-foreground">Showing results for your search</p>
               </div>
@@ -329,116 +241,118 @@ export default function PropertiesPage() {
             </div>
 
             {/* Properties Grid */}
-            <div
-              className={
-                viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-6"
-              }
-            >
-              {filteredProperties.map((property, index) => (
-                <motion.div
-                  key={property.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: index * 0.05 }}
+            {isLoading ? (
+               <div className="flex justify-center py-20">
+                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
+               </div>
+            ) : (
+                <div
+                  className={
+                    viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-6"
+                  }
                 >
-                  <Link href={`/properties/${property.id}`}>
-                    <div
-                      className={`group bg-white rounded-xl overflow-hidden shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] transition-all duration-300 ${
-                        viewMode === "list" ? "flex flex-col md:flex-row" : ""
-                      }`}
+                  {propertiesData?.properties.map((property, index) => (
+                    <motion.div
+                      key={property._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: index * 0.05 }}
                     >
-                      {/* Image */}
-                      <div
-                        className={`relative overflow-hidden ${viewMode === "list" ? "md:w-80 h-48 md:h-auto" : "h-56"}`}
-                      >
-                        <Image
-                          src={property.image || "/placeholder.svg"}
-                          alt={property.title}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                        {/* Badges */}
-                        <div className="absolute top-4 left-4 flex gap-2">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              property.type === "For Sale" ? "bg-primary text-white" : "bg-accent text-primary"
-                            }`}
-                          >
-                            {property.type}
-                          </span>
-                          {property.has360Tour && (
-                            <span className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-semibold text-primary flex items-center gap-1">
-                              <View className="w-3 h-3" />
-                              360°
-                            </span>
-                          )}
-                        </div>
-                        {/* Favorite Button */}
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault()
-                            toggleFavorite(property.id)
-                          }}
-                          className="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
-                          aria-label="Add to favorites"
+                      <Link href={`/properties/${property._id}`}>
+                        <div
+                          className={`group bg-white rounded-xl overflow-hidden shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] transition-all duration-300 ${
+                            viewMode === "list" ? "flex flex-col md:flex-row" : ""
+                          }`}
                         >
-                          <Heart
-                            className={`w-5 h-5 transition-colors ${
-                              favorites.includes(property.id) ? "fill-red-500 text-red-500" : "text-primary"
-                            }`}
-                          />
-                        </button>
-                        {/* Verified Badge */}
-                        {property.isVerified && (
-                          <div className="absolute bottom-4 left-4 px-3 py-1 bg-green-500 text-white rounded-full text-xs font-semibold">
-                            Verified
+                          {/* Image */}
+                          <div
+                            className={`relative overflow-hidden ${viewMode === "list" ? "md:w-80 h-48 md:h-auto" : "h-56"}`}
+                          >
+                            <Image
+                              src={property.images?.[0]?.url || "/placeholder.svg"}
+                              alt={property.title}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                            {/* Badges */}
+                            <div className="absolute top-4 left-4 flex gap-2">
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                                  property.status === "sale" ? "bg-primary text-white" : "bg-accent text-primary"
+                                }`}
+                              >
+                                For {property.status}
+                              </span>
+                            </div>
+                            {/* Favorite Button */}
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                toggleFavorite(property._id)
+                              }}
+                              className="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                              aria-label="Add to favorites"
+                            >
+                              <Heart
+                                className={`w-5 h-5 transition-colors ${
+                                  favorites.includes(property._id) ? "fill-red-500 text-red-500" : "text-primary"
+                                }`}
+                              />
+                            </button>
+                            {/* Verified Badge */}
+                            {property.agent?.isVerified && (
+                              <div className="absolute bottom-4 left-4 px-3 py-1 bg-green-500 text-white rounded-full text-xs font-semibold">
+                                Verified Agent
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      {/* Content */}
-                      <div className={`p-5 ${viewMode === "list" ? "flex-1" : ""}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="font-heading font-bold text-lg text-primary group-hover:text-accent transition-colors">
-                              {property.title}
-                            </h3>
-                            <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-                              <MapPin className="w-4 h-4" />
-                              <span className="text-sm">{property.location}</span>
+                          {/* Content */}
+                          <div className={`p-5 ${viewMode === "list" ? "flex-1" : ""}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h3 className="font-heading font-bold text-lg text-primary group-hover:text-accent transition-colors">
+                                  {property.title}
+                                </h3>
+                                <div className="flex items-center gap-1 mt-1 text-muted-foreground">
+                                  <MapPin className="w-4 h-4" />
+                                  <span className="text-sm">{property.location.address}, {property.location.city}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Features */}
+                            <div className="flex items-center gap-4 mt-4 text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Bed className="w-4 h-4" />
+                                <span className="text-sm">{property.bedrooms} Beds</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Bath className="w-4 h-4" />
+                                <span className="text-sm">{property.bathrooms} Baths</span>
+                              </div>
+                              {property.size && (
+                                <div className="flex items-center gap-1">
+                                  <Square className="w-4 h-4" />
+                                  <span className="text-sm">{property.size} {property.sizeUnit}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Price */}
+                            <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                              <p className="font-heading text-xl font-bold text-accent">
+                                {formatPrice(property.price, property.currency)}
+                              </p>
+                              <span className="text-sm text-muted-foreground">View Details →</span>
                             </div>
                           </div>
                         </div>
-
-                        {/* Features */}
-                        <div className="flex items-center gap-4 mt-4 text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Bed className="w-4 h-4" />
-                            <span className="text-sm">{property.beds} Beds</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Bath className="w-4 h-4" />
-                            <span className="text-sm">{property.baths} Baths</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Square className="w-4 h-4" />
-                            <span className="text-sm">{property.sqft.toLocaleString()} sqft</span>
-                          </div>
-                        </div>
-
-                        {/* Price */}
-                        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                          <p className="font-heading text-xl font-bold text-accent">
-                            {formatPrice(property.price, property.type)}
-                          </p>
-                          <span className="text-sm text-muted-foreground">View Details →</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
-            </div>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </div>
+            )}
 
             {/* Load More */}
             <div className="mt-12 text-center">

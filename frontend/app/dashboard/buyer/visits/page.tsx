@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
@@ -13,6 +14,7 @@ import {
   CheckCircle,
   XCircle,
   MoreHorizontal,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,65 +25,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-// Mock scheduled visits data
-const scheduledVisits = [
-  {
-    id: 1,
-    propertyTitle: "Luxury 4-Bedroom Duplex",
-    propertyImage: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-    location: "Lekki Phase 1, Lagos",
-    date: "Dec 15, 2025",
-    time: "10:00 AM",
-    status: "confirmed",
-    agent: {
-      name: "Chidi Okonkwo",
-      phone: "+234 801 234 5678",
-    },
-  },
-  {
-    id: 2,
-    propertyTitle: "Modern 3-Bedroom Apartment",
-    propertyImage: "/contemporary-penthouse-apartment-lagos.jpg",
-    location: "Victoria Island, Lagos",
-    date: "Dec 18, 2025",
-    time: "2:00 PM",
-    status: "pending",
-    agent: {
-      name: "Amaka Eze",
-      phone: "+234 802 345 6789",
-    },
-  },
-  {
-    id: 3,
-    propertyTitle: "Executive 5-Bedroom Mansion",
-    propertyImage: "/waterfront-mansion-banana-island-lagos.jpg",
-    location: "Banana Island, Lagos",
-    date: "Dec 20, 2025",
-    time: "11:00 AM",
-    status: "confirmed",
-    agent: {
-      name: "Tunde Bakare",
-      phone: "+234 803 456 7890",
-    },
-  },
-]
-
-const pastVisits = [
-  {
-    id: 4,
-    propertyTitle: "Smart Home Apartment",
-    propertyImage: "/smart-home-apartment-eko-atlantic-lagos.jpg",
-    location: "Eko Atlantic, Lagos",
-    date: "Dec 5, 2025",
-    time: "3:00 PM",
-    status: "completed",
-    agent: {
-      name: "Kemi Adeyemi",
-      phone: "+234 804 567 8901",
-    },
-  },
-]
+import { inquiryService, Inquiry } from "@/services/inquiry.service"
+import { toast } from "sonner"
+import dayjs from "dayjs"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -98,11 +44,11 @@ const itemVariants = {
 
 function getStatusBadge(status: string) {
   switch (status) {
-    case "confirmed":
+    case "responded":
       return (
         <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20">
           <CheckCircle className="w-3 h-3 mr-1" />
-          Confirmed
+          Responded
         </Badge>
       )
     case "pending":
@@ -112,18 +58,11 @@ function getStatusBadge(status: string) {
           Pending
         </Badge>
       )
-    case "completed":
+    case "closed":
       return (
         <Badge className="bg-slate-500/10 text-slate-600 hover:bg-slate-500/20">
           <CheckCircle className="w-3 h-3 mr-1" />
-          Completed
-        </Badge>
-      )
-    case "cancelled":
-      return (
-        <Badge className="bg-red-500/10 text-red-600 hover:bg-red-500/20">
-          <XCircle className="w-3 h-3 mr-1" />
-          Cancelled
+          Closed
         </Badge>
       )
     default:
@@ -132,6 +71,28 @@ function getStatusBadge(status: string) {
 }
 
 export default function MyVisitsPage() {
+  const [scheduledVisits, setScheduledVisits] = useState<Inquiry[]>([])
+  const [pastVisits, setPastVisits] = useState<Inquiry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const fetchVisits = async () => {
+    try {
+      setIsLoading(true)
+      const data = await inquiryService.getInbox(1, 100)
+      const inquiries = data.inquiries || []
+      setScheduledVisits(inquiries.filter((inc) => inc.status !== 'closed'))
+      setPastVisits(inquiries.filter((inc) => inc.status === 'closed'))
+    } catch (error) {
+      console.error("Failed to fetch visits:", error)
+      toast.error("Failed to load your visits")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchVisits()
+  }, [])
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -167,19 +128,30 @@ export default function MyVisitsPage() {
           Upcoming Visits ({scheduledVisits.length})
         </h2>
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-4"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-4"
         >
-          {scheduledVisits.map((visit) => (
-            <motion.div key={visit.id} variants={itemVariants}>
+          {isLoading ? (
+             <div className="flex justify-center p-8">
+               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+             </div>
+          ) : scheduledVisits.length === 0 ? (
+              <div className="text-center p-8 text-muted-foreground bg-card rounded-xl border">
+                  No upcoming visits scheduled.
+              </div>
+          ) : scheduledVisits.map((visit) => {
+             const property = typeof visit.property === 'object' ? visit.property : null;
+             
+             return (
+            <motion.div key={visit._id} variants={itemVariants}>
               <Card className="overflow-hidden hover:shadow-lg transition-all duration-300">
                 <div className="flex flex-col sm:flex-row">
-                  <div className="relative w-full sm:w-48 h-40 sm:h-auto flex-shrink-0">
+                  <div className="relative w-full sm:w-48 h-40 sm:h-auto flex-shrink-0 bg-muted">
                     <Image
-                      src={visit.propertyImage || "/placeholder.svg"}
-                      alt={visit.propertyTitle}
+                      src={property?.images?.[0]?.url || "/placeholder.svg"}
+                      alt={property?.title || "Property"}
                       fill
                       className="object-cover"
                     />
@@ -189,32 +161,32 @@ export default function MyVisitsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-heading font-semibold text-lg text-foreground truncate">
-                            {visit.propertyTitle}
+                            {property?.title || `Property ID: ${visit.property}`}
                           </h3>
                           {getStatusBadge(visit.status)}
                         </div>
                         <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                           <MapPin className="w-4 h-4" />
-                          <span>{visit.location}</span>
+                          <span>{property?.location?.address || 'Location Unavailable'}</span>
                         </div>
                         <div className="flex items-center gap-4 mt-3 text-sm">
                           <span className="flex items-center gap-1 text-foreground font-medium">
                             <Calendar className="w-4 h-4 text-accent" />
-                            {visit.date}
+                            {dayjs(visit.createdAt).format('MMM D, YYYY')}
                           </span>
                           <span className="flex items-center gap-1 text-foreground font-medium">
                             <Clock className="w-4 h-4 text-accent" />
-                            {visit.time}
+                            {dayjs(visit.createdAt).format('h:mm A')}
                           </span>
                         </div>
                         <div className="flex items-center gap-4 mt-3 pt-3 border-t text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <User className="w-4 h-4" />
-                            {visit.agent.name}
+                            {visit.name || 'Agent Name'}
                           </span>
                           <span className="flex items-center gap-1">
                             <Phone className="w-4 h-4" />
-                            {visit.agent.phone}
+                            {visit.phone || property?.agent?.phone || 'N/A'}
                           </span>
                         </div>
                       </div>
@@ -244,7 +216,7 @@ export default function MyVisitsPage() {
                 </div>
               </Card>
             </motion.div>
-          ))}
+          )})}
         </motion.div>
       </motion.div>
 
@@ -264,14 +236,17 @@ export default function MyVisitsPage() {
             animate="visible"
             className="space-y-4"
           >
-            {pastVisits.map((visit) => (
-              <motion.div key={visit.id} variants={itemVariants}>
+            {pastVisits.map((visit) => {
+              const property = typeof visit.property === 'object' ? visit.property : null;
+                
+              return (
+              <motion.div key={visit._id} variants={itemVariants}>
                 <Card className="overflow-hidden opacity-75 hover:opacity-100 transition-all duration-300">
                   <div className="flex flex-col sm:flex-row">
-                    <div className="relative w-full sm:w-48 h-32 sm:h-auto flex-shrink-0 grayscale">
+                    <div className="relative w-full sm:w-48 h-32 sm:h-auto flex-shrink-0 bg-muted grayscale">
                       <Image
-                        src={visit.propertyImage || "/placeholder.svg"}
-                        alt={visit.propertyTitle}
+                        src={property?.images?.[0]?.url || "/placeholder.svg"}
+                        alt={property?.title || "Property"}
                         fill
                         className="object-cover"
                       />
@@ -281,26 +256,26 @@ export default function MyVisitsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-heading font-semibold text-foreground truncate">
-                              {visit.propertyTitle}
+                              {property?.title || `Property ID: ${visit.property}`}
                             </h3>
                             {getStatusBadge(visit.status)}
                           </div>
                           <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                             <MapPin className="w-4 h-4" />
-                            <span>{visit.location}</span>
+                            <span>{property?.location?.address || 'Location Unavailable'}</span>
                           </div>
                           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-4 h-4" />
-                              {visit.date}
+                              {dayjs(visit.createdAt).format('MMM D, YYYY')}
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
-                              {visit.time}
+                              {dayjs(visit.createdAt).format('h:mm A')}
                             </span>
                           </div>
                         </div>
-                        <Link href={`/properties/${visit.id}`}>
+                        <Link href={`/properties/${typeof visit.property === 'object' ? visit.property._id : visit.property}`}>
                           <Button variant="outline" size="sm">
                             View Property
                           </Button>
@@ -310,7 +285,7 @@ export default function MyVisitsPage() {
                   </div>
                 </Card>
               </motion.div>
-            ))}
+            )})}
           </motion.div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">

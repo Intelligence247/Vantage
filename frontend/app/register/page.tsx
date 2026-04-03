@@ -7,14 +7,21 @@ import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Check } from "lucide-react"
+import { useAuth } from "../../context/AuthContext"
+import { authService } from "../../services/auth.service"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 export default function RegisterPage() {
+  const router = useRouter()
+  const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     phone: "",
     password: "",
+    role: "user", // "user" or "agent"
   })
   const [isLoading, setIsLoading] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -30,8 +37,31 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!acceptedTerms) return
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsLoading(false)
+    
+    try {
+      const payload = {
+        name: formData.fullName, // Backend expects 'name'
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        role: formData.role // 'user' (Buyer) or 'agent' (Vendor)
+      }
+      
+      const authData = await authService.register(payload)
+      toast.success("Account created successfully!")
+      
+      // Auto-login the user after registration if the API returns tokens
+      if (authData.tokens?.accessToken) {
+        login(authData)
+      } else {
+        router.push("/login")
+      }
+    } catch (error: any) {
+      console.error("Registration failed", error)
+      toast.error(error.response?.data?.message || "Registration failed. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const passwordRequirements = [
@@ -242,7 +272,41 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <div className="flex items-start gap-2">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-primary mb-2">
+                I am registering as a:
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'user' })}
+                  className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${
+                    formData.role === 'user' 
+                      ? 'border-primary bg-primary/5 text-primary' 
+                      : 'border-border text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <User className="w-5 h-5" />
+                  <span className="font-medium">Buyer</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, role: 'agent' })}
+                  className={`py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${
+                    formData.role === 'agent' 
+                      ? 'border-primary bg-primary/5 text-primary' 
+                      : 'border-border text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span className="font-medium">Agent</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 pt-2">
               <input
                 type="checkbox"
                 id="terms"

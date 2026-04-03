@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -21,45 +21,9 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
-// Mock saved properties data
-const savedProperties = [
-  {
-    id: 1,
-    title: "Luxury 4-Bedroom Duplex",
-    location: "Lekki Phase 1, Lagos",
-    price: "₦85,000,000",
-    type: "For Sale",
-    beds: 4,
-    baths: 5,
-    sqft: "450",
-    image: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-    savedAt: "Dec 10, 2025",
-  },
-  {
-    id: 2,
-    title: "Modern 3-Bedroom Apartment",
-    location: "Victoria Island, Lagos",
-    price: "₦2,500,000/yr",
-    type: "For Rent",
-    beds: 3,
-    baths: 3,
-    sqft: "280",
-    image: "/contemporary-penthouse-apartment-lagos.jpg",
-    savedAt: "Dec 8, 2025",
-  },
-  {
-    id: 3,
-    title: "Executive 5-Bedroom Mansion",
-    location: "Banana Island, Lagos",
-    price: "₦450,000,000",
-    type: "For Sale",
-    beds: 5,
-    baths: 7,
-    sqft: "850",
-    image: "/waterfront-mansion-banana-island-lagos.jpg",
-    savedAt: "Dec 5, 2025",
-  },
-]
+import { propertyService, Property } from "@/services/property.service"
+import { toast } from "sonner"
+import { Loader2 } from "lucide-react"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -77,12 +41,60 @@ const itemVariants = {
 export default function SavedHomesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [searchQuery, setSearchQuery] = useState("")
+  const [savedProperties, setSavedProperties] = useState<Property[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const fetchSavedProperties = async () => {
+    try {
+      setIsLoading(true)
+      const data = await propertyService.getFavorites(1, 100)
+      setSavedProperties(data.properties)
+    } catch (error) {
+      console.error("Failed to load saved properties:", error)
+      toast.error("Failed to load your saved properties")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchSavedProperties()
+  }, [])
+
+  const handleRemoveFavorite = async (propertyId: string) => {
+    try {
+      await propertyService.toggleFavorite(propertyId)
+      setSavedProperties((prev) => prev.filter((p) => p._id !== propertyId))
+      toast.success("Property removed from favorites")
+    } catch (error) {
+      console.error("Failed to remove favorite:", error)
+      toast.error("An error occurred")
+    }
+  }
+
+  const formatPrice = (price: number, currency: string = "₦") => {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: "NGN",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(price).replace("NGN", currency)
+  }
 
   const filteredProperties = savedProperties.filter(
     (property) =>
-      property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.location.toLowerCase().includes(searchQuery.toLowerCase())
+      property.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.location?.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.location?.city?.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  if (isLoading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -154,41 +166,31 @@ export default function SavedHomesPage() {
               : "space-y-4"
           }
         >
-          {filteredProperties.map((property, index) => (
-            <motion.div key={property.id} variants={itemVariants}>
+          {filteredProperties.map((property) => (
+            <motion.div key={property._id} variants={itemVariants}>
               <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
                 <div className="relative h-48 overflow-hidden">
                   <Image
-                    src={property.image || "/placeholder.svg"}
+                    src={property.images?.[0]?.url || "/placeholder.svg"}
                     alt={property.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute top-3 left-3">
                     <Badge
-                      className={
-                        property.type === "For Sale"
-                          ? "bg-accent text-primary"
-                          : "bg-primary text-white"
-                      }
+                      className="bg-primary text-white capitalize"
                     >
-                      {property.type}
+                      For {property.status}
                     </Badge>
                   </div>
                   <div className="absolute top-3 right-3 flex gap-2">
                     <Button
                       variant="secondary"
                       size="icon"
+                      onClick={() => handleRemoveFavorite(property._id)}
                       className="h-8 w-8 bg-white/90 hover:bg-white text-red-500"
                     >
                       <Heart className="w-4 h-4 fill-current" />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      className="h-8 w-8 bg-white/90 hover:bg-white text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
@@ -198,27 +200,27 @@ export default function SavedHomesPage() {
                   </h3>
                   <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                     <MapPin className="w-4 h-4" />
-                    <span className="truncate">{property.location}</span>
+                    <span className="truncate">{property.location?.address}, {property.location?.city}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Bed className="w-4 h-4" />
-                      {property.beds}
+                      {property.bedrooms || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Bath className="w-4 h-4" />
-                      {property.baths}
+                      {property.bathrooms || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Maximize className="w-4 h-4" />
-                      {property.sqft}m²
+                      {property.size || 0} {property.sizeUnit || 'sqm'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-4 pt-4 border-t">
                     <span className="font-heading font-bold text-lg text-foreground">
-                      {property.price}
+                      {formatPrice(property.price, property.currency)}
                     </span>
-                    <Link href={`/properties/${property.id}`}>
+                    <Link href={`/properties/${property._id}`}>
                       <Button variant="outline" size="sm" className="gap-1">
                         <ExternalLink className="w-4 h-4" />
                         View

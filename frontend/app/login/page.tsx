@@ -7,19 +7,31 @@ import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react"
+import { useAuth } from "../../context/AuthContext"
+import { authService } from "../../services/auth.service"
+import { toast } from "sonner" // assuming sonner is available based on package.json
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const { login } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsLoading(false)
+    
+    try {
+      const authData = await authService.login({ email, password })
+      toast.success("Login successful!")
+      login(authData)
+    } catch (error: any) {
+      console.error("Login failed", error)
+      toast.error(error.response?.data?.message || "Invalid credentials. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

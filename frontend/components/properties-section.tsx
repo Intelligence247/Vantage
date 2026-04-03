@@ -1,83 +1,13 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
+import Link from "next/link"
 import { MapPin, Bed, Bath, Square, Heart, Eye } from "lucide-react"
+import { propertyService, Property } from "@/services/property.service"
 
-const properties = [
-  {
-    id: 1,
-    title: "Luxury 4 Bedroom Duplex",
-    location: "Lekki Phase 1, Lagos",
-    price: "₦85,000,000",
-    beds: 4,
-    baths: 5,
-    sqft: "350 sqm",
-    image: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-    has360: true,
-    isNew: true,
-  },
-  {
-    id: 2,
-    title: "Executive 3 Bedroom Flat",
-    location: "Victoria Island, Lagos",
-    price: "₦45,000,000",
-    beds: 3,
-    baths: 3,
-    sqft: "180 sqm",
-    image: "/modern-apartment-building-nigeria-victoria-island.jpg",
-    has360: true,
-    isNew: false,
-  },
-  {
-    id: 3,
-    title: "Modern Smart Home",
-    location: "Maitama, Abuja",
-    price: "₦120,000,000",
-    beds: 5,
-    baths: 6,
-    sqft: "500 sqm",
-    image: "/luxury-smart-home-mansion-abuja-nigeria.jpg",
-    has360: false,
-    isNew: true,
-  },
-  {
-    id: 4,
-    title: "Waterfront Penthouse",
-    location: "Banana Island, Lagos",
-    price: "₦250,000,000",
-    beds: 4,
-    baths: 4,
-    sqft: "280 sqm",
-    image: "/luxury-penthouse-waterfront-banana-island-lagos.jpg",
-    has360: true,
-    isNew: false,
-  },
-  {
-    id: 5,
-    title: "Contemporary Townhouse",
-    location: "Ikeja GRA, Lagos",
-    price: "₦55,000,000",
-    beds: 4,
-    baths: 4,
-    sqft: "250 sqm",
-    image: "/modern-townhouse-ikeja-gra-lagos-nigeria.jpg",
-    has360: false,
-    isNew: false,
-  },
-  {
-    id: 6,
-    title: "Premium Office Space",
-    location: "Central Business District, Abuja",
-    price: "₦75,000,000",
-    beds: 0,
-    baths: 2,
-    sqft: "400 sqm",
-    image: "/modern-office-building-abuja-central-business-dist.jpg",
-    has360: true,
-    isNew: true,
-  },
-]
+// We use the new Property interface from our service
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -96,12 +26,28 @@ const itemVariants = {
     y: 0,
     transition: {
       duration: 0.5,
-      ease: "easeOut",
     },
   },
 }
 
 export function PropertiesSection() {
+  const [properties, setProperties] = useState<Property[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        const data = await propertyService.getFeatured(6)
+        setProperties(data)
+      } catch (error) {
+        console.error("Failed to load properties", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchProperties()
+  }, [])
+
   return (
     <section className="py-24 lg:py-32 bg-muted/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -135,16 +81,27 @@ export function PropertiesSection() {
           viewport={{ once: true }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
-          {properties.map((property) => (
+          {isLoading ? (
+             Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="bg-white rounded-2xl h-[420px] animate-pulse">
+                   <div className="h-[250px] bg-gray-200 rounded-t-2xl"></div>
+                   <div className="p-6 space-y-4">
+                      <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-5 bg-gray-200 rounded w-2/3"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                   </div>
+                </div>
+             ))
+          ) : properties.map((property) => (
             <motion.div
-              key={property.id}
+              key={property._id}
               variants={itemVariants}
               className="group bg-white rounded-2xl overflow-hidden shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-2px_rgba(0,0,0,0.1)] transition-all duration-300"
             >
               {/* Image Container */}
               <div className="relative aspect-[4/3] overflow-hidden">
                 <Image
-                  src={property.image || "/placeholder.svg"}
+                  src={property.images?.[0]?.url || "/placeholder.svg"}
                   alt={property.title}
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -152,15 +109,12 @@ export function PropertiesSection() {
 
                 {/* Badges */}
                 <div className="absolute top-4 left-4 flex gap-2">
-                  {property.has360 && (
-                    <span className="bg-black/70 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                      <Eye className="w-3.5 h-3.5" />
-                      360° Tour
-                    </span>
-                  )}
-                  {property.isNew && (
-                    <span className="bg-accent text-white text-xs font-medium px-3 py-1.5 rounded-full">New</span>
-                  )}
+                  <span className="bg-accent text-white text-xs font-medium px-3 py-1.5 rounded-full capitalize">
+                    {property.status}
+                  </span>
+                  <span className="bg-primary/90 text-white text-xs font-medium px-3 py-1.5 rounded-full capitalize">
+                    {property.type}
+                  </span>
                 </div>
 
                 {/* Heart Button */}
@@ -172,7 +126,9 @@ export function PropertiesSection() {
               {/* Content */}
               <div className="p-6">
                 {/* Price */}
-                <div className="text-accent font-heading text-2xl font-bold mb-2">{property.price}</div>
+                <div className="text-accent font-heading text-2xl font-bold mb-2">
+                  {property.currency} {property.price.toLocaleString()}
+                </div>
 
                 {/* Title */}
                 <h3 className="font-heading text-lg font-bold text-primary mb-2 line-clamp-1">{property.title}</h3>
@@ -180,31 +136,35 @@ export function PropertiesSection() {
                 {/* Location */}
                 <div className="flex items-center gap-1.5 text-gray-600 text-sm mb-4">
                   <MapPin className="w-4 h-4" />
-                  <span>{property.location}</span>
+                  <span>{property.location.address}, {property.location.city}</span>
                 </div>
 
                 {/* Features */}
                 <div className="flex items-center gap-4 pt-4 border-t border-border">
-                  {property.beds > 0 && (
+                  {property.bedrooms > 0 && (
                     <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                       <Bed className="w-4 h-4" />
-                      <span>{property.beds} Beds</span>
+                      <span>{property.bedrooms} Beds</span>
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 text-gray-600 text-sm">
                     <Bath className="w-4 h-4" />
-                    <span>{property.baths} Baths</span>
+                    <span>{property.bathrooms} Baths</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-600 text-sm">
-                    <Square className="w-4 h-4" />
-                    <span>{property.sqft}</span>
-                  </div>
+                  {property.size && (
+                    <div className="flex items-center gap-1.5 text-gray-600 text-sm">
+                      <Square className="w-4 h-4" />
+                      <span>{property.size} {property.sizeUnit}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* CTA */}
-                <button className="w-full mt-6 border-2 border-primary text-primary py-3 rounded-lg font-semibold hover:bg-primary hover:text-primary-foreground transition-all duration-200 active:scale-[0.98]">
+                <Link 
+                  href={`/properties/${property._id}`}
+                  className="w-full mt-6 border-2 border-primary text-primary py-3 flex justify-center rounded-lg font-semibold hover:bg-primary hover:text-primary-foreground transition-all duration-200 active:scale-[0.98]">
                   View Details
-                </button>
+                </Link>
               </div>
             </motion.div>
           ))}

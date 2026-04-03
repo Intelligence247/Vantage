@@ -1,108 +1,56 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Search, MoreHorizontal, Send, Paperclip, Phone, Mail, Clock, Check } from "lucide-react"
+import { Search, MoreHorizontal, Send, Paperclip, Phone, Mail, Clock, Check, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { inquiryService, Inquiry } from "@/services/inquiry.service"
+import { toast } from "sonner"
+import dayjs from "dayjs"
+import relativeTime from "dayjs/plugin/relativeTime"
 
-const conversations = [
-  {
-    id: 1,
-    name: "Chidi Okonkwo",
-    role: "Listing Agent",
-    agency: "Vantage Realty",
-    avatar: "/professional-nigerian-real-estate-agent-portrait.jpg",
-    lastMessage: "The property at Lekki Phase 1 is available for viewing this Saturday.",
-    time: "2m ago",
-    unread: true,
-    property: "Luxury 4-Bedroom Duplex",
-    phone: "+234 801 234 5678",
-    email: "chidi.okonkwo@vantage.com",
-    online: true,
-  },
-  {
-    id: 2,
-    name: "Amaka Eze",
-    role: "Property Manager",
-    agency: "Lagos Homes",
-    avatar: "/nigerian-woman-professional-portrait.jpg",
-    lastMessage: "I've sent the tenancy agreement for your review.",
-    time: "1h ago",
-    unread: false,
-    property: "Modern 3-Bedroom Apartment",
-    phone: "+234 802 345 6789",
-    email: "amaka.eze@lagoshomes.com",
-    online: false,
-  },
-  {
-    id: 3,
-    name: "Tunde Bakare",
-    role: "Real Estate Agent",
-    agency: "Island Properties",
-    avatar: "/nigerian-man-business-portrait.jpg",
-    lastMessage: "Let me know if you need more details about the Banana Island mansion.",
-    time: "1d ago",
-    unread: false,
-    property: "Executive 5-Bedroom Mansion",
-    phone: "+234 803 456 7890",
-    email: "tunde.b@islandproperties.com",
-    online: false,
-  },
-]
-
-const messages = [
-  {
-    id: 1,
-    sender: "me",
-    text: "Hello, I'm interested in the Luxury 4-Bedroom Duplex. Is it still available?",
-    time: "10:30 AM",
-    status: "read",
-  },
-  {
-    id: 2,
-    sender: "agent",
-    text: "Good morning! Yes, it is. It's a fantastic property. Would you like to schedule a viewing?",
-    time: "10:32 AM",
-    status: "read",
-  },
-  {
-    id: 3,
-    sender: "me",
-    text: "Yes, I'm free this weekend. Saturday works best for me.",
-    time: "10:35 AM",
-    status: "read",
-  },
-  {
-    id: 4,
-    sender: "agent",
-    text: "Great! How does 10:00 AM sound?",
-    time: "10:36 AM",
-    status: "read",
-  },
-  {
-    id: 5,
-    sender: "agent",
-    text: "The property at Lekki Phase 1 is available for viewing this Saturday.",
-    time: "10:38 AM",
-    status: "delivered",
-  },
-]
+dayjs.extend(relativeTime)
 
 export default function BuyerInboxPage() {
-  const [selectedConversation, setSelectedConversation] = useState(conversations[0])
+  const [inquiries, setInquiries] = useState<Inquiry[]>([])
+  const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null)
   const [messageText, setMessageText] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredConversations = conversations.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.property.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const fetchInquiries = async () => {
+    try {
+      setIsLoading(true)
+      const data = await inquiryService.getInbox(1, 50)
+      setInquiries(data.inquiries)
+      if (data.inquiries.length > 0) {
+        setSelectedInquiry(data.inquiries[0])
+      }
+    } catch (error) {
+      console.error("Failed to load inbox:", error)
+      toast.error("Failed to load messages")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchInquiries()
+  }, [])
+
+  const filteredInquiries = inquiries.filter((inquiry) => {
+    const propName = typeof inquiry.property === 'object' ? inquiry.property.title : String(inquiry.property)
+    return (
+      propName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      inquiry.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      inquiry.status.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  })
 
   return (
     <div className="h-[calc(100vh-4rem)] lg:h-screen flex bg-background">
@@ -127,46 +75,53 @@ export default function BuyerInboxPage() {
         
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {filteredConversations.map((conversation) => (
+            {isLoading ? (
+               <div className="flex justify-center p-8">
+                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+               </div>
+            ) : filteredInquiries.length === 0 ? (
+                <div className="text-center p-8 text-muted-foreground text-sm">
+                    No inquiries found.
+                </div>
+            ) : filteredInquiries.map((inquiry) => {
+              const propTitle = typeof inquiry.property === 'object' ? inquiry.property.title : `Property ${inquiry.property}`
+              const isSelected = selectedInquiry?._id === inquiry._id
+              
+              return (
               <div
-                key={conversation.id}
-                onClick={() => setSelectedConversation(conversation)}
+                key={inquiry._id}
+                onClick={() => setSelectedInquiry(inquiry)}
                 className={`
                   flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors
-                  ${selectedConversation.id === conversation.id ? "bg-accent/10 border border-accent/20" : "hover:bg-muted border border-transparent"}
+                  ${isSelected ? "bg-accent/10 border border-accent/20" : "hover:bg-muted border border-transparent"}
                 `}
               >
                 <div className="relative flex-shrink-0">
-                  <Image
-                    src={conversation.avatar || "/placeholder.svg"}
-                    alt={conversation.name}
-                    width={48}
-                    height={48}
-                    className="rounded-full object-cover"
-                  />
-                  {conversation.online && (
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-card" />
-                  )}
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                    {propTitle.charAt(0).toUpperCase()}
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={`font-medium truncate ${conversation.unread ? "text-foreground font-bold" : "text-foreground"}`}>
-                      {conversation.name}
+                    <span className={`font-medium truncate ${isSelected ? "text-foreground font-bold" : "text-foreground"}`}>
+                      {propTitle}
                     </span>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">{conversation.time}</span>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                        {dayjs(inquiry.createdAt).fromNow(true)}
+                    </span>
                   </div>
-                  <p className={`text-sm truncate mt-0.5 ${conversation.unread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                    {conversation.lastMessage}
+                  <p className={`text-sm truncate mt-0.5 ${isSelected ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                    {inquiry.message}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <Badge variant="secondary" className="text-[10px] px-1.5 h-5 font-normal">
-                        {conversation.role}
+                    <Badge variant="secondary" className="text-[10px] px-1.5 h-5 font-normal capitalize">
+                        {inquiry.status}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground truncate">• {conversation.property}</span>
+                    <span className="text-[10px] text-muted-foreground truncate capitalize">• {inquiry.type}</span>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </ScrollArea>
       </motion.div>
@@ -179,24 +134,19 @@ export default function BuyerInboxPage() {
         className="hidden sm:flex flex-1 flex-col bg-background"
       >
         {/* Chat Header */}
+        {selectedInquiry ? (
+            <>
         <div className="h-16 px-6 border-b flex items-center justify-between bg-card">
           <div className="flex items-center gap-3">
-            <div className="relative">
-                <Image
-                src={selectedConversation.avatar || "/placeholder.svg"}
-                alt={selectedConversation.name}
-                width={40}
-                height={40}
-                className="rounded-full object-cover"
-                />
-                {selectedConversation.online && (
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card" />
-                )}
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                {typeof selectedInquiry.property === 'object' ? selectedInquiry.property.title.charAt(0).toUpperCase() : 'P'}
             </div>
             <div>
-              <h2 className="font-medium text-foreground">{selectedConversation.name}</h2>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                {selectedConversation.agency} • {selectedConversation.role}
+              <h2 className="font-medium text-foreground truncate">
+                {typeof selectedInquiry.property === 'object' ? selectedInquiry.property.title : `Property ${selectedInquiry.property}`}
+              </h2>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 capitalize">
+                Status: {selectedInquiry.status} • Type: {selectedInquiry.type}
               </p>
             </div>
           </div>
@@ -219,36 +169,30 @@ export default function BuyerInboxPage() {
             <div className="flex justify-center mb-6">
               <Badge variant="outline" className="text-xs font-normal text-muted-foreground bg-background">
                 <Clock className="w-3 h-3 mr-1" />
-                Today, December 13
+                {dayjs(selectedInquiry.createdAt).format('MMMM D, YYYY')}
               </Badge>
             </div>
             
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.sender === "me" ? "justify-end" : "justify-start"}`}>
-                <div className={`flex flex-col ${message.sender === "me" ? "items-end" : "items-start"} max-w-[75%]`}>
-                    <div
-                    className={`
-                        rounded-2xl px-4 py-3 shadow-sm
-                        ${
-                        message.sender === "me"
-                            ? "bg-primary text-primary-foreground rounded-br-none"
-                            : "bg-white border text-foreground rounded-bl-none"
-                        }
-                    `}
-                    >
-                    <p className="text-sm leading-relaxed">{message.text}</p>
+            {/* The single initial inquiry message from the buyer */}
+            <div className={`flex justify-end`}>
+                <div className={`flex flex-col items-end max-w-[75%]`}>
+                    <div className={`rounded-2xl px-4 py-3 shadow-sm bg-primary text-primary-foreground rounded-br-none`}>
+                        <p className="text-sm leading-relaxed">{selectedInquiry.message}</p>
                     </div>
                     <div className="flex items-center gap-1 mt-1 px-1">
-                        <span className="text-[10px] text-muted-foreground">{message.time}</span>
-                        {message.sender === "me" && (
-                            <Check className="w-3 h-3 text-emerald-500" />
-                        )}
+                        <span className="text-[10px] text-muted-foreground">{dayjs(selectedInquiry.createdAt).format('h:mm A')}</span>
+                        <Check className="w-3 h-3 text-emerald-500" />
                     </div>
                 </div>
-              </div>
-            ))}
+            </div>
           </div>
         </ScrollArea>
+        </>
+        ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                <p>Select an inquiry to view details</p>
+            </div>
+        )}
 
         {/* Input Area */}
         <div className="p-4 border-t bg-card">

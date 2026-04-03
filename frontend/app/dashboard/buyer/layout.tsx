@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { LayoutGrid, Heart, MessageSquare, Calendar, Settings, LogOut, Menu, X, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/context/AuthContext"
 
 const navLinks = [
   { name: "Overview", href: "/dashboard/buyer", icon: LayoutGrid },
@@ -23,6 +24,7 @@ export default function BuyerDashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const { user, logout } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const isActive = (href: string) => {
@@ -120,19 +122,20 @@ export default function BuyerDashboardLayout({
           <div className="p-4 border-t border-white/10">
             <div className="flex items-center gap-3 px-2 py-2 mb-2">
               <div className="w-10 h-10 rounded-full overflow-hidden bg-white/20">
-                {/* Placeholder Avatar for Buyer */}
-                <div className="w-full h-full flex items-center justify-center bg-accent text-primary font-bold">
-                  B
+                {/* Avatar for Buyer */}
+                <div className="w-full h-full flex items-center justify-center bg-accent text-primary font-bold uppercase">
+                  {user?.name?.[0] || 'B'}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm truncate">Buyer Name</p>
-                <p className="text-white/50 text-xs truncate">Verified User</p>
+                <p className="text-white font-medium text-sm truncate capitalize">{user?.name || "Buyer Name"}</p>
+                <p className="text-white/50 text-xs truncate capitalize">{user?.role || "User"}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-white/50" />
             </div>
             <Button
               variant="ghost"
+              onClick={logout}
               className="w-full justify-start gap-3 text-white/70 hover:text-white hover:bg-white/5"
             >
               <LogOut className="w-5 h-5" />

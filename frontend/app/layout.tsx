@@ -23,6 +23,8 @@ export const metadata: Metadata = {
   keywords: ["real estate", "Nigeria", "property", "buy", "rent", "verified agents"],
 }
 
+import { Providers } from "@/components/providers"
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,8 +33,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased`}>
-        {children}
-        <Analytics />
+        <Providers>
+          {children}
+          <Analytics />
+        </Providers>
       </body>
     </html>
   )
