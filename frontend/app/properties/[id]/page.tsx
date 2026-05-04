@@ -33,6 +33,10 @@ import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 
 import { propertyService, Property } from "@/services/property.service"
+import { inquiryService } from "@/services/inquiry.service"
+import { paymentService } from "@/services/payment.service"
+import { useAuth } from "@/context/AuthContext"
+import { toast } from "sonner"
 
 const amenityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   "Smart Home Automation": Zap,
@@ -51,9 +55,13 @@ const amenityIcons: Record<string, React.ComponentType<{ className?: string }>> 
 
 export default function PropertyDetailPage() {
   const params = useParams()
+  const { user } = useAuth()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isFavorite, setIsFavorite] = useState(false)
   const [showContactForm, setShowContactForm] = useState(false)
+  const [inquiryData, setInquiryData] = useState({ name: '', email: '', phone: '', message: '' })
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false)
+  const [isInitializingPayment, setIsInitializingPayment] = useState(false)
   const [property, setProperty] = useState<Property | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -63,6 +71,11 @@ export default function PropertyDetailPage() {
         if (params.id) {
           const data = await propertyService.getById(params.id as string)
           setProperty(data)
+          if (user && data.favoritedBy?.includes(user.id)) {
+             setIsFavorite(true)
+          } else {
+             setIsFavorite(false)
+          }
         }
       } catch (error) {
         console.error("Failed to load property details:", error)
@@ -71,7 +84,76 @@ export default function PropertyDetailPage() {
       }
     }
     fetchProperty()
-  }, [params.id])
+  }, [params.id, user])
+
+  const handleToggleFavorite = async () => {
+    if (!user) {
+        toast.error("Please log in to save properties")
+        return
+    }
+    if (!property) return
+    if (!property.id && !(property as any)._id) return
+    try {
+        const idToUse = property.id || (property as any)._id
+        const res = await propertyService.toggleFavorite(idToUse)
+        setIsFavorite(res.isFavorited)
+        toast.success(res.isFavorited ? "Property saved to favorites!" : "Removed from favorites")
+    } catch(e) {
+        toast.error("Failed to toggle favorite")
+    }
+  }
+
+  const handleInquirySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!property) return
+    if (!property.id && !(property as any)._id) return
+    try {
+        setIsSubmittingInquiry(true)
+        const idToUse = property.id || (property as any)._id
+        if (user) {
+          await inquiryService.createInquiry({
+            propertyId: idToUse,
+            name: user.name || inquiryData.name,
+            email: user.email || inquiryData.email,
+            phone: inquiryData.phone,
+            message: inquiryData.message,
+          })
+        } else {
+          await inquiryService.createPropertyInquiry(idToUse, inquiryData)
+        }
+        toast.success("Message sent successfully to the agent!")
+        setShowContactForm(false)
+        setInquiryData({ name: '', email: '', phone: '', message: '' })
+    } catch(e) {
+        toast.error("Failed to send inquiry")
+    } finally {
+        setIsSubmittingInquiry(false)
+    }
+  }
+
+  const handlePurchase = async () => {
+    if (!property) return;
+    const propertyId = property.id || (property as any)._id;
+    if (!propertyId) return;
+    if (!user) {
+      toast.error("Please log in before making payment.");
+      return;
+    }
+    if (!["buyer", "user"].includes(user.role)) {
+      toast.error("Only buyers can initialize payments.");
+      return;
+    }
+
+    try {
+      setIsInitializingPayment(true);
+      const response = await paymentService.initialize(propertyId);
+      window.location.href = response.authorizationUrl;
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to initialize payment");
+    } finally {
+      setIsInitializingPayment(false);
+    }
+  };
 
   const nextImage = () => {
     if (!property?.images) return
@@ -172,7 +254,7 @@ export default function PropertyDetailPage() {
                 {/* Action Buttons */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button
-                    onClick={() => setIsFavorite(!isFavorite)}
+                    onClick={handleToggleFavorite}
                     className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
                     aria-label="Add to favorites"
                   >
@@ -225,7 +307,7 @@ export default function PropertyDetailPage() {
                   <h1 className="font-heading text-3xl lg:text-4xl font-bold text-primary">{property.title}</h1>
                   <div className="flex items-center gap-2 mt-3 text-muted-foreground">
                     <MapPin className="w-5 h-5" />
-                    <span>{property.location?.address}, {property.location?.city}, {property.location?.state}</span>
+                    <span>{[property.address, property.city, property.state].filter(Boolean).join(', ')}</span>
                   </div>
                   <p className="mt-4 text-3xl font-bold text-accent">{formatPrice(property.price)}</p>
                 </motion.div>
@@ -238,9 +320,9 @@ export default function PropertyDetailPage() {
                   className="grid grid-cols-2 sm:grid-cols-4 gap-4"
                 >
                   {[
-                    { icon: Bed, label: "Bedrooms", value: property.bedrooms },
-                    { icon: Bath, label: "Bathrooms", value: property.bathrooms },
-                    { icon: Square, label: "Size", value: `${property.size || 0} ${property.sizeUnit || 'sqm'}` },
+                    { icon: Bed, label: "Bedrooms", value: property.beds || 0 },
+                    { icon: Bath, label: "Bathrooms", value: property.baths || 0 },
+                    { icon: Square, label: "Size", value: `${property.sqft || 0} sqft` },
                     { icon: Home, label: "Property Type", value: property.type },
                   ].map((stat, index) => (
                     <div key={index} className="bg-muted/30 rounded-xl p-4 text-center">
@@ -325,6 +407,15 @@ export default function PropertyDetailPage() {
 
                   {/* Contact Buttons */}
                   <div className="space-y-3">
+                    {property.status === "available" && (
+                      <button
+                        onClick={handlePurchase}
+                        disabled={isInitializingPayment}
+                        className="flex items-center justify-center gap-2 w-full bg-accent text-primary py-3 rounded-xl font-semibold hover:bg-accent-hover transition-colors disabled:opacity-70"
+                      >
+                        {isInitializingPayment ? "Redirecting..." : "Purchase / Settle"}
+                      </button>
+                    )}
                     <a
                       href={`tel:${property.agent?.phone || ''}`}
                       className="flex items-center justify-center gap-2 w-full bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-light transition-colors"
@@ -353,6 +444,7 @@ export default function PropertyDetailPage() {
                   {/* Contact Form */}
                   {showContactForm && (
                     <motion.form
+                      onSubmit={handleInquirySubmit}
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       className="mt-6 space-y-4"
@@ -360,28 +452,40 @@ export default function PropertyDetailPage() {
                       <input
                         type="text"
                         placeholder="Your Name"
+                        value={inquiryData.name}
+                        onChange={(e) => setInquiryData({...inquiryData, name: e.target.value})}
+                        required
                         className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                       <input
                         type="email"
                         placeholder="Your Email"
+                        value={inquiryData.email}
+                        onChange={(e) => setInquiryData({...inquiryData, email: e.target.value})}
+                        required
                         className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                       <input
                         type="tel"
                         placeholder="Your Phone"
+                        value={inquiryData.phone}
+                        onChange={(e) => setInquiryData({...inquiryData, phone: e.target.value})}
                         className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent"
                       />
                       <textarea
                         placeholder="I'm interested in this property..."
                         rows={4}
+                        required
+                        value={inquiryData.message}
+                        onChange={(e) => setInquiryData({...inquiryData, message: e.target.value})}
                         className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-accent resize-none"
                       />
                       <button
                         type="submit"
-                        className="w-full bg-accent text-primary py-3 rounded-xl font-semibold hover:bg-accent-hover transition-colors"
+                        disabled={isSubmittingInquiry}
+                        className="w-full flex items-center justify-center bg-accent text-primary py-3 rounded-xl font-semibold hover:bg-accent-hover transition-colors disabled:opacity-70"
                       >
-                        Send Inquiry
+                        {isSubmittingInquiry ? <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /> : "Send Inquiry"}
                       </button>
                     </motion.form>
                   )}
@@ -390,7 +494,7 @@ export default function PropertyDetailPage() {
                   <div className="mt-6 pt-6 border-t border-border">
                     <div className="flex items-center justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Property ID</span>
-                      <span className="font-medium text-primary">{property._id?.substring(0, 8)}</span>
+                      <span className="font-medium text-primary">{(property.id || (property as any)._id)?.substring(0, 8)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Date Listed</span>

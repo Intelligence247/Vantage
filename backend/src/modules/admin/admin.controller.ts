@@ -13,11 +13,20 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 import { Role } from '../../common/enums/role.enum';
+import { zodValidate } from '../../common/utils';
+import {
+  adminUserListQuerySchema,
+  adminPendingPropertiesQuerySchema,
+  adminIdParamSchema,
+  suspendUserSchema,
+  SuspendUserDto,
+} from './dto/admin.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -43,10 +52,11 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('role') role?: string,
   ) {
+    const validated = zodValidate(adminUserListQuerySchema, { page, limit, role });
     return this.adminService.getUsers(
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
-      role,
+      parseInt(validated.page, 10),
+      parseInt(validated.limit, 10),
+      validated.role,
     );
   }
 
@@ -54,17 +64,21 @@ export class AdminController {
   @ApiOperation({ summary: 'Verify an agent' })
   @ApiParam({ name: 'id', description: 'User ID' })
   async verifyAgent(@Param('id') id: string) {
-    return this.adminService.verifyAgent(id);
+    const validated = zodValidate(adminIdParamSchema, { id });
+    return this.adminService.verifyAgent(validated.id);
   }
 
   @Put('users/:id/suspend')
   @ApiOperation({ summary: 'Suspend or unsuspend a user' })
   @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({ type: SuspendUserDto })
   async suspendUser(
     @Param('id') id: string,
-    @Body('suspend') suspend: boolean,
+    @Body() body: SuspendUserDto,
   ) {
-    return this.adminService.suspendUser(id, suspend);
+    const validatedParam = zodValidate(adminIdParamSchema, { id });
+    const validatedBody = zodValidate(suspendUserSchema, body);
+    return this.adminService.suspendUser(validatedParam.id, validatedBody.suspend);
   }
 
   @Get('properties/pending')
@@ -75,9 +89,13 @@ export class AdminController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const validated = zodValidate(adminPendingPropertiesQuerySchema, {
+      page,
+      limit,
+    });
     return this.adminService.getPendingProperties(
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      parseInt(validated.page, 10),
+      parseInt(validated.limit, 10),
     );
   }
 
@@ -85,6 +103,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Approve a property' })
   @ApiParam({ name: 'id', description: 'Property ID' })
   async approveProperty(@Param('id') id: string) {
-    return this.adminService.approveProperty(id);
+    const validated = zodValidate(adminIdParamSchema, { id });
+    return this.adminService.approveProperty(validated.id);
   }
 }

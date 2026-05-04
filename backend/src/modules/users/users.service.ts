@@ -14,12 +14,15 @@ import {
   UpdateUserInput,
   ChangePasswordInput,
   UpdateNotificationPrefsInput,
+  UploadKycInput,
 } from './dto/user.dto';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
+    private readonly mailService: MailService,
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
   ) {}
 
@@ -79,6 +82,20 @@ export class UsersService {
     return user;
   }
 
+  async uploadKycDocument(id: string, input: UploadKycInput): Promise<UserDocument> {
+    const user = await this.usersRepository.update(id, input);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    // Fire off async email alert to admin
+    this.mailService.sendAdminVendorAlert(user.name, user.email).catch(e => {
+        this.logger.error('Failed to send Admin KYC Alert', e);
+    });
+
+    return user;
+  }
+
   async changePassword(
     id: string,
     input: ChangePasswordInput,
@@ -116,6 +133,25 @@ export class UsersService {
       : undefined;
     await this.usersRepository.update(id, {
       hashedRefreshToken: hashedRefreshToken ?? null,
+    });
+  }
+
+  async setEmailVerificationToken(
+    id: string,
+    token: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.usersRepository.update(id, {
+      emailVerificationToken: token,
+      emailVerificationTokenExpires: expiresAt,
+    });
+  }
+
+  async verifyEmail(id: string): Promise<void> {
+    await this.usersRepository.update(id, {
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationTokenExpires: null,
     });
   }
 

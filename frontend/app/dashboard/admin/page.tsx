@@ -1,7 +1,8 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Users, Building2, UserCheck, AlertCircle, ArrowUpRight, ArrowDownRight, MoreHorizontal, ShieldAlert, CheckCircle } from "lucide-react"
+import { Users, Building2, UserCheck, AlertCircle, ArrowUpRight, ArrowDownRight, MoreHorizontal, ShieldAlert, CheckCircle, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,98 +13,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Image from "next/image"
+import { adminService, AdminStats } from "@/services/admin.service"
+import { UserProfile } from "@/services/user.service"
+import { Property } from "@/services/property.service"
+import { toast } from "sonner"
+import dayjs from "dayjs"
+import relativeTime from "dayjs/plugin/relativeTime"
 
-const stats = [
-  {
-    title: "Total Users",
-    value: "14,582",
-    change: "+12%",
-    trend: "up",
-    icon: Users,
-    description: "active accounts",
-  },
-  {
-    title: "Pending Verifications",
-    value: "28",
-    change: "+4",
-    trend: "up",
-    icon: UserCheck,
-    description: "awaiting approval",
-    highlight: true,
-  },
-  {
-    title: "Active Listings",
-    value: "3,254",
-    change: "+8%",
-    trend: "up",
-    icon: Building2,
-    description: "live properties",
-  },
-  {
-    title: "System Alerts",
-    value: "3",
-    change: "-2",
-    trend: "down",
-    icon: AlertCircle,
-    description: "critical issues",
-  },
-]
+dayjs.extend(relativeTime)
 
-const recentRegistrations = [
-  {
-    id: 1,
-    name: "Golden Gate Agency",
-    type: "Vendor",
-    email: "contact@goldengate.com",
-    date: "2 mins ago",
-    status: "pending",
-  },
-  {
-    id: 2,
-    name: "David Adeleke",
-    type: "Buyer",
-    email: "david.a@gmail.com",
-    date: "15 mins ago",
-    status: "verified",
-  },
-  {
-    id: 3,
-    name: "Lekki Gardens Ltd",
-    type: "Vendor",
-    email: "sales@lekkigardens.com",
-    date: "1 hour ago",
-    status: "verified",
-  },
-  {
-    id: 4,
-    name: "Sarah Johnson",
-    type: "Buyer",
-    email: "s.johnson@yahoo.com",
-    date: "3 hours ago",
-    status: "verified",
-  },
-]
 
-const recentProperties = [
-    {
-      id: 1,
-      title: "Luxury 5-Bed Detached Duplex",
-      location: "Ikoyi, Lagos",
-      price: "₦850,000,000",
-      agent: "Prime Real Estate",
-      status: "pending",
-      image: "/waterfront-mansion-banana-island-lagos.jpg"
-    },
-    {
-      id: 2,
-      title: "Commercial Office Complex",
-      location: "Victoria Island, Lagos",
-      price: "₦45,000,000/yr",
-      agent: "CBRE Nigeria",
-      status: "active",
-      image: "/contemporary-penthouse-apartment-lagos.jpg"
-    }
-]
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -119,6 +38,77 @@ const itemVariants = {
 }
 
 export default function AdminDashboardOverview() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [statsData, setStatsData] = useState<AdminStats | null>(null)
+  const [recentUsers, setRecentUsers] = useState<UserProfile[]>([])
+  const [pendingProperties, setPendingProperties] = useState<Property[]>([])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+        const stats = await adminService.getStats()
+        const usersResponse = await adminService.getUsers(1, 5)
+        const pendingResponse = await adminService.getPendingProperties(1, 5)
+        setStatsData(stats)
+        setRecentUsers(usersResponse.users)
+        setPendingProperties(pendingResponse.properties)
+      } catch (error) {
+        console.error("Dashboard error:", error)
+        toast.error("Failed to load admin metrics")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const stats = [
+    {
+      title: "Total Users",
+      value: (statsData?.users.totalUsers || 0).toLocaleString(),
+      change: "+2%",
+      trend: "up",
+      icon: Users,
+      description: "active accounts",
+    },
+    {
+      title: "Pending Action",
+      value: (statsData?.users.pendingVerifications || 0).toString(),
+      change: "+0%",
+      trend: "up",
+      icon: UserCheck,
+      description: "awaiting approval",
+      highlight: (statsData?.users.pendingVerifications || 0) > 0,
+    },
+    {
+      title: "Total Properties",
+      value: (statsData?.properties.totalProperties || 0).toLocaleString(),
+      change: "+12%",
+      trend: "up",
+      icon: Building2,
+      description: "listed properties",
+    },
+    {
+      title: "Pending Properties",
+      value: (statsData?.properties.pendingProperties || 0).toString(),
+      change: "+0",
+      trend: "up",
+      icon: AlertCircle,
+      description: "awaiting review",
+      highlight: (statsData?.properties.pendingProperties || 0) > 0,
+    },
+  ]
+
+  if (isLoading) {
+      return (
+          <div className="flex justify-center flex-col items-center h-[70vh] gap-4">
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
+              <p className="text-muted-foreground animate-pulse">Loading global dashboard metrics...</p>
+          </div>
+      )
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -194,8 +184,8 @@ export default function AdminDashboardOverview() {
                     </tr>
                   </thead>
                   <tbody>
-                    {recentRegistrations.map((user) => (
-                      <tr key={user.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                    {recentUsers.map((user) => (
+                      <tr key={user.id || user._id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex flex-col">
                             <span className="font-medium text-foreground">{user.name}</span>
@@ -203,12 +193,12 @@ export default function AdminDashboardOverview() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                            <Badge variant="secondary" className="font-normal">
-                                {user.type}
+                            <Badge variant="secondary" className="font-normal capitalize">
+                                {user.role}
                             </Badge>
                         </td>
                         <td className="py-3 px-4">
-                            {user.status === 'pending' ? (
+                            {!user.isVerified ? (
                                 <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 gap-1 shadow-none">
                                     <ShieldAlert className="w-3 h-3" /> Verify
                                 </Badge>
@@ -218,7 +208,7 @@ export default function AdminDashboardOverview() {
                                 </Badge>
                             )}
                         </td>
-                        <td className="py-3 px-4 text-right text-muted-foreground">{user.date}</td>
+                        <td className="py-3 px-4 text-right text-muted-foreground">{dayjs(user.createdAt).fromNow()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -238,11 +228,15 @@ export default function AdminDashboardOverview() {
             <div className="flex items-center justify-between">
                 <h2 className="font-heading text-lg font-bold">Pending Review</h2>
             </div>
-            {recentProperties.map(property => (
+            {pendingProperties.length === 0 ? (
+                <div className="text-center py-10 bg-muted/20 border border-dashed rounded-xl">
+                    <p className="text-sm text-muted-foreground">No pending properties to review.</p>
+                </div>
+            ) : pendingProperties.map(property => (
                 <Card key={property.id} className="overflow-hidden group hover:shadow-md transition-shadow">
                     <div className="relative h-32 bg-muted">
                         <Image
-                            src={property.image}
+                            src={property.images?.[0]?.url || "/placeholder.svg"}
                             alt={property.title}
                             fill
                             className="object-cover"
@@ -255,9 +249,11 @@ export default function AdminDashboardOverview() {
                     </div>
                     <CardContent className="p-4">
                         <h3 className="font-medium text-foreground truncate">{property.title}</h3>
-                        <p className="text-sm text-muted-foreground mb-2">{property.location}</p>
+                        <p className="text-sm text-muted-foreground mb-2">{property.location?.type === 'Point' ? 'Geolocation set' : (property.city || property.address)}</p>
                         <div className="flex items-center justify-between pt-2 border-t">
-                            <p className="font-bold text-foreground text-sm">{property.price}</p>
+                            <p className="font-bold text-foreground text-sm">
+                              {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(property.price)}
+                            </p>
                             <Button size="sm" variant="secondary" className="h-7 text-xs">Review</Button>
                         </div>
                     </CardContent>

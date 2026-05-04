@@ -64,7 +64,7 @@ export default function SavedHomesPage() {
   const handleRemoveFavorite = async (propertyId: string) => {
     try {
       await propertyService.toggleFavorite(propertyId)
-      setSavedProperties((prev) => prev.filter((p) => p._id !== propertyId))
+      setSavedProperties((prev) => prev.filter((p) => p.id !== propertyId))
       toast.success("Property removed from favorites")
     } catch (error) {
       console.error("Failed to remove favorite:", error)
@@ -84,8 +84,8 @@ export default function SavedHomesPage() {
   const filteredProperties = savedProperties.filter(
     (property) =>
       property.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.location?.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.location?.city?.toLowerCase().includes(searchQuery.toLowerCase())
+      property.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      property.city?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   if (isLoading) {
@@ -167,7 +167,7 @@ export default function SavedHomesPage() {
           }
         >
           {filteredProperties.map((property) => (
-            <motion.div key={property._id} variants={itemVariants}>
+            <motion.div key={property.id} variants={itemVariants}>
               <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
                 <div className="relative h-48 overflow-hidden">
                   <Image
@@ -187,7 +187,7 @@ export default function SavedHomesPage() {
                     <Button
                       variant="secondary"
                       size="icon"
-                      onClick={() => handleRemoveFavorite(property._id)}
+                      onClick={() => handleRemoveFavorite(property.id)}
                       className="h-8 w-8 bg-white/90 hover:bg-white text-red-500"
                     >
                       <Heart className="w-4 h-4 fill-current" />
@@ -200,27 +200,27 @@ export default function SavedHomesPage() {
                   </h3>
                   <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                     <MapPin className="w-4 h-4" />
-                    <span className="truncate">{property.location?.address}, {property.location?.city}</span>
+                    <span className="truncate">{property.address}, {property.city}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Bed className="w-4 h-4" />
-                      {property.bedrooms || 0}
+                      {property.beds || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Bath className="w-4 h-4" />
-                      {property.bathrooms || 0}
+                      {property.baths || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Maximize className="w-4 h-4" />
-                      {property.size || 0} {property.sizeUnit || 'sqm'}
+                      {property.sqft || 0} m²
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-4 pt-4 border-t">
                     <span className="font-heading font-bold text-lg text-foreground">
-                      {formatPrice(property.price, property.currency)}
+                      {formatPrice(property.price)}
                     </span>
-                    <Link href={`/properties/${property._id}`}>
+                    <Link href={`/properties/${property.id}`}>
                       <Button variant="outline" size="sm" className="gap-1">
                         <ExternalLink className="w-4 h-4" />
                         View

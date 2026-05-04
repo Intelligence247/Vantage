@@ -3,11 +3,12 @@
 import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { LayoutGrid, Building2, MessageSquare, BarChart3, Settings, LogOut, Menu, X, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/context/AuthContext"
+import { formatRoleLabel } from "@/lib/dashboard-routes"
 
 const navLinks = [
   { name: "Overview", href: "/dashboard/vendor", icon: LayoutGrid },
@@ -24,6 +25,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { user, logout } = useAuth()
 
   const isActive = (href: string) => {
     if (href === "/dashboard/vendor") return pathname === "/dashboard/vendor"
@@ -119,27 +121,32 @@ export default function DashboardLayout({
           {/* User Profile & Logout */}
           <div className="p-4 border-t border-white/10">
             <div className="flex items-center gap-3 px-2 py-2 mb-2">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-white/20">
-                <Image
-                  src="/professional-nigerian-real-estate-agent-portrait.jpg"
-                  alt="Agent Avatar"
-                  width={40}
-                  height={40}
-                  className="w-full h-full object-cover"
-                />
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-white/20 flex items-center justify-center">
+                <span className="text-sm font-semibold text-white uppercase tracking-tight">
+                  {user?.name
+                    ? user.name
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()
+                    : "AG"}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm truncate">Chidi Okonkwo</p>
-                <p className="text-white/50 text-xs truncate">Verified Agent</p>
+                <p className="text-white font-medium text-sm truncate">{user?.name ?? "Agent"}</p>
+                <p className="text-white/50 text-xs truncate">{formatRoleLabel(user?.role)}</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-white/50" />
+              <ChevronRight className="w-4 h-4 text-white/50 shrink-0" aria-hidden />
             </div>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-3 text-white/70 hover:text-white hover:bg-white/5"
+              className="w-full justify-start gap-3 text-white/80 hover:text-white hover:bg-white/10"
+              onClick={logout}
             >
-              <LogOut className="w-5 h-5" />
-              <span>Logout</span>
+              <LogOut className="w-5 h-5 shrink-0" />
+              <span>Log out</span>
             </Button>
           </div>
         </div>

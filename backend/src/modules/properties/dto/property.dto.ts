@@ -131,6 +131,7 @@ export const propertyQuerySchema = z.object({
   page: z.string().optional().default('1'),
   limit: z.string().optional().default('20'),
   search: z.string().optional(),
+  agent: z.string().optional(),
   type: z.nativeEnum(PropertyType).optional(),
   category: z.nativeEnum(PropertyCategory).optional(),
   propertyKind: z.nativeEnum(PropertyKind).optional(),

@@ -6,12 +6,14 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { LayoutGrid, Heart, MessageSquare, Calendar, Settings, LogOut, Menu, X, ChevronRight } from "lucide-react"
+import { LayoutGrid, Heart, MessageSquare, Calendar, Settings, LogOut, Menu, X, ChevronRight, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/context/AuthContext"
+import { formatRoleLabel } from "@/lib/dashboard-routes"
 
 const navLinks = [
   { name: "Overview", href: "/dashboard/buyer", icon: LayoutGrid },
+  { name: "My purchases", href: "/dashboard/buyer/purchases", icon: ShoppingBag },
   { name: "Saved Homes", href: "/dashboard/buyer/saved", icon: Heart },
   { name: "Inbox", href: "/dashboard/buyer/inbox", icon: MessageSquare, badge: 1 },
   { name: "My Visits", href: "/dashboard/buyer/visits", icon: Calendar },
@@ -129,17 +131,17 @@ export default function BuyerDashboardLayout({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-medium text-sm truncate capitalize">{user?.name || "Buyer Name"}</p>
-                <p className="text-white/50 text-xs truncate capitalize">{user?.role || "User"}</p>
+                <p className="text-white/50 text-xs truncate">{formatRoleLabel(user?.role)}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-white/50" />
             </div>
             <Button
               variant="ghost"
               onClick={logout}
-              className="w-full justify-start gap-3 text-white/70 hover:text-white hover:bg-white/5"
+              className="w-full justify-start gap-3 text-white/80 hover:text-white hover:bg-white/10"
             >
-              <LogOut className="w-5 h-5" />
-              <span>Logout</span>
+              <LogOut className="w-5 h-5 shrink-0" />
+              <span>Log out</span>
             </Button>
           </div>
         </div>

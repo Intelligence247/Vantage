@@ -1,70 +1,18 @@
 "use client"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Plus, Eye, Building2, Users, TrendingUp, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react"
+import { Plus, Eye, Building2, Users, TrendingUp, MoreHorizontal, Pencil, Trash2, ExternalLink, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/context/AuthContext"
+import { propertyService, Property } from "@/services/property.service"
+import { toast } from "sonner"
 
-const stats = [
-  {
-    title: "Total Views",
-    value: "12.4k",
-    change: "+12%",
-    trend: "up",
-    icon: Eye,
-    description: "vs last month",
-  },
-  {
-    title: "Active Listings",
-    value: "8",
-    change: "+2",
-    trend: "up",
-    icon: Building2,
-    description: "properties live",
-  },
-  {
-    title: "New Leads",
-    value: "24",
-    change: "+18%",
-    trend: "up",
-    icon: Users,
-    description: "this week",
-    highlight: true,
-  },
-]
 
-const recentListings = [
-  {
-    id: 1,
-    title: "Luxury 4-Bedroom Duplex",
-    location: "Lekki Phase 1, Lagos",
-    price: "₦85,000,000",
-    status: "active",
-    views: 342,
-    image: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-  },
-  {
-    id: 2,
-    title: "Modern 3-Bedroom Apartment",
-    location: "Victoria Island, Lagos",
-    price: "₦2,500,000/yr",
-    status: "active",
-    views: 218,
-    image: "/contemporary-penthouse-apartment-lagos.jpg",
-  },
-  {
-    id: 3,
-    title: "Executive 5-Bedroom Mansion",
-    location: "Banana Island, Lagos",
-    price: "₦450,000,000",
-    status: "sold",
-    views: 567,
-    image: "/waterfront-mansion-banana-island-lagos.jpg",
-  },
-]
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -80,6 +28,75 @@ const itemVariants = {
 }
 
 export default function DashboardOverview() {
+  const { user } = useAuth()
+  const [statsData, setStatsData] = useState<any>(null)
+  const [recentListings, setRecentListings] = useState<Property[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+      const loadDashboard = async () => {
+          try {
+              const [statsRes, propsRes] = await Promise.all([
+                  propertyService.getAgentStats(),
+                  propertyService.getAgentProperties(1, 5)
+              ])
+              setStatsData(statsRes)
+              setRecentListings(propsRes.properties)
+          } catch (error) {
+              console.error("Dashboard error", error)
+              toast.error("Failed to load dashboard data")
+          } finally {
+              setIsLoading(false)
+          }
+      }
+      loadDashboard()
+  }, [])
+
+  const stats = [
+    {
+      title: "Total Views",
+      value: statsData?.totalViews || 0,
+      change: "+0%",
+      trend: "up",
+      icon: Eye,
+      description: "overall",
+    },
+    {
+      title: "Active Listings",
+      value: statsData?.activeProperties || 0,
+      change: `out of ${statsData?.totalProperties || 0} total`,
+      trend: "neutral",
+      icon: Building2,
+      description: "properties live",
+    },
+    {
+      title: "Total Leads",
+      value: statsData?.totalLeads || 0,
+      change: "+0%",
+      trend: "up",
+      icon: Users,
+      description: "inquiries received",
+      highlight: true,
+    },
+  ]
+
+  // Format price
+  const formatPrice = (price: number, type: string, paymentPeriod?: string) => {
+    const amount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(price);
+    if (type === 'rent' || type === 'shortlet') {
+        return paymentPeriod ? `${amount}/${paymentPeriod}` : `${amount}/yr`;
+    }
+    return amount;
+  }
+
+  if (isLoading) {
+      return (
+          <div className="flex justify-center items-center h-[60vh]">
+              <Loader2 className="w-10 h-10 animate-spin text-accent" />
+          </div>
+      )
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -89,7 +106,7 @@ export default function DashboardOverview() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8"
       >
         <div>
-          <h1 className="font-heading text-2xl lg:text-3xl font-bold text-foreground">Welcome back, Chidi</h1>
+          <h1 className="font-heading text-2xl lg:text-3xl font-bold text-foreground">Welcome back, {user?.name?.split(' ')[0] || 'Agent'}</h1>
           <p className="text-muted-foreground mt-1">Here's what's happening with your properties today.</p>
         </div>
         <Link href="/dashboard/vendor/properties/new">
@@ -182,7 +199,7 @@ export default function DashboardOverview() {
                         <div className="flex items-center gap-3">
                           <div className="w-16 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                             <Image
-                              src={listing.image || "/placeholder.svg"}
+                              src={listing.images?.[0]?.url || "/placeholder.svg"}
                               alt={listing.title}
                               width={64}
                               height={48}
@@ -191,29 +208,29 @@ export default function DashboardOverview() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-foreground truncate">{listing.title}</p>
-                            <p className="text-sm text-muted-foreground truncate">{listing.location}</p>
+                            <p className="text-sm text-muted-foreground truncate">{listing.city ? `${listing.city}, ${listing.state}` : listing.state}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <span className="font-semibold text-foreground">{listing.price}</span>
+                        <span className="font-semibold text-foreground">{formatPrice(listing.price, listing.type, listing.paymentPeriod)}</span>
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <Eye className="w-4 h-4" />
-                          <span>{listing.views}</span>
+                          <span>{listing.views || 0}</span>
                         </div>
                       </td>
                       <td className="py-4 px-4">
                         <Badge
-                          variant={listing.status === "active" ? "default" : "secondary"}
+                          variant={listing.status === "available" ? "default" : "secondary"}
                           className={
-                            listing.status === "active"
+                            listing.status === "available"
                               ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
                               : "bg-muted text-muted-foreground"
                           }
                         >
-                          {listing.status === "active" ? "Active" : "Sold"}
+                          {listing.status ? listing.status.charAt(0).toUpperCase() + listing.status.slice(1) : ''}
                         </Badge>
                       </td>
                       <td className="py-4 px-4 text-right">
@@ -224,10 +241,18 @@ export default function DashboardOverview() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="gap-2 cursor-pointer">
-                              <Pencil className="w-4 h-4" />
-                              Edit
-                            </DropdownMenuItem>
+                            <Link href={`/properties/${listing.id}`}>
+                                <DropdownMenuItem className="gap-2 cursor-pointer">
+                                <Eye className="w-4 h-4" />
+                                View
+                                </DropdownMenuItem>
+                            </Link>
+                            <Link href={`/dashboard/vendor/properties/${listing.id}/edit`}>
+                              <DropdownMenuItem className="gap-2 cursor-pointer">
+                                <Pencil className="w-4 h-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            </Link>
                             <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                               <Trash2 className="w-4 h-4" />
                               Delete
@@ -250,7 +275,7 @@ export default function DashboardOverview() {
                 >
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                     <Image
-                      src={listing.image || "/placeholder.svg"}
+                      src={listing.images?.[0]?.url || "/placeholder.svg"}
                       alt={listing.title}
                       width={80}
                       height={80}
@@ -261,7 +286,7 @@ export default function DashboardOverview() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">{listing.title}</p>
-                        <p className="text-sm text-muted-foreground truncate">{listing.location}</p>
+                        <p className="text-sm text-muted-foreground truncate">{listing.city ? `${listing.city}, ${listing.state}` : listing.state}</p>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -270,10 +295,18 @@ export default function DashboardOverview() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2 cursor-pointer">
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                          </DropdownMenuItem>
+                          <Link href={`/properties/${listing.id}`}>
+                              <DropdownMenuItem className="gap-2 cursor-pointer">
+                              <Eye className="w-4 h-4" />
+                              View
+                              </DropdownMenuItem>
+                          </Link>
+                          <Link href={`/dashboard/vendor/properties/${listing.id}/edit`}>
+                            <DropdownMenuItem className="gap-2 cursor-pointer">
+                              <Pencil className="w-4 h-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          </Link>
                           <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                             <Trash2 className="w-4 h-4" />
                             Delete
@@ -282,16 +315,16 @@ export default function DashboardOverview() {
                       </DropdownMenu>
                     </div>
                     <div className="flex items-center gap-4 mt-2">
-                      <span className="font-semibold text-foreground text-sm">{listing.price}</span>
+                      <span className="font-semibold text-foreground text-sm">{formatPrice(listing.price, listing.type, listing.paymentPeriod)}</span>
                       <Badge
-                        variant={listing.status === "active" ? "default" : "secondary"}
+                        variant={listing.status === "available" ? "default" : "secondary"}
                         className={
-                          listing.status === "active"
+                          listing.status === "available"
                             ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
                             : "bg-muted text-muted-foreground"
                         }
                       >
-                        {listing.status === "active" ? "Active" : "Sold"}
+                        {listing.status ? listing.status.charAt(0).toUpperCase() + listing.status.slice(1) : ''}
                       </Badge>
                     </div>
                   </div>

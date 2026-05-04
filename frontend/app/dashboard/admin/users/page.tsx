@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import {
   Search,
@@ -11,6 +11,7 @@ import {
   UserX,
   CheckCircle,
   Mail,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,68 +28,78 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// Mock Users Data
-const usersData = [
-  {
-    id: 1,
-    name: "Golden Gate Agency",
-    email: "contact@goldengate.com",
-    role: "Vendor",
-    status: "pending",
-    joined: "Dec 12, 2025",
-    avatar: "/placeholder-avatar.jpg",
-  },
-  {
-    id: 2,
-    name: "Chidi Okonkwo",
-    email: "chidi.okonkwo@vantage.com",
-    role: "Vendor",
-    status: "verified",
-    joined: "Nov 28, 2025",
-    avatar: "/professional-nigerian-real-estate-agent-portrait.jpg",
-  },
-  {
-    id: 3,
-    name: "David Adeleke",
-    email: "david.a@gmail.com",
-    role: "Buyer",
-    status: "active",
-    joined: "Dec 10, 2025",
-    avatar: "/nigerian-man-business-portrait.jpg",
-  },
-  {
-    id: 4,
-    name: "Lekki Gardens Ltd",
-    email: "sales@lekkigardens.com",
-    role: "Vendor",
-    status: "suspended",
-    joined: "Oct 15, 2025",
-    avatar: "/placeholder-logo.jpg",
-  },
-  {
-    id: 5,
-    name: "Sarah Johnson",
-    email: "s.johnson@yahoo.com",
-    role: "Buyer",
-    status: "active",
-    joined: "Dec 05, 2025",
-    avatar: "/nigerian-woman-professional-portrait.jpg",
-  },
-]
+import { adminService } from "@/services/admin.service"
+import { UserProfile } from "@/services/user.service"
+import { toast } from "sonner"
+import dayjs from "dayjs"
+import relativeTime from "dayjs/plugin/relativeTime"
+
+dayjs.extend(relativeTime)
 
 export default function UserManagementPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
+  
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredUsers = usersData.filter((user) => {
+  const loadUsers = async () => {
+      try {
+          setIsLoading(true)
+          const data = await adminService.getUsers(1, 100) // load up to 100 for basic view
+          setUsers(data.users)
+      } catch (error) {
+          console.error("Failed to load users:", error)
+          toast.error("Error loading users")
+      } finally {
+          setIsLoading(false)
+      }
+  }
+
+  useEffect(() => {
+      loadUsers()
+  }, [])
+
+  const handleVerify = async (userId: string) => {
+      if (!userId) return
+      try {
+          await adminService.verifyAgent(userId)
+          toast.success("Agent verified successfully")
+          loadUsers()
+      } catch(e) {
+          console.error(e)
+          toast.error("Failed to verify user")
+      }
+  }
+
+  const handleSuspend = async (userId: string, suspend: boolean) => {
+      if (!userId) return
+      try {
+          await adminService.suspendUser(userId, suspend)
+          toast.success(`User ${suspend ? 'suspended' : 'reactivated'} successfully`)
+          loadUsers()
+      } catch(e) {
+          console.error(e)
+          toast.error("Failed to update user status")
+      }
+  }
+
+  const computeStatus = (user: any) => {
+      if (user.status) return user.status // If backend includes it directly
+      if (user.isSuspended) return "suspended"
+      if (user.role === "agent" && !user.isVerified) return "pending"
+      return user.isVerified ? "verified" : "active"
+  }
+
+  const filteredUsers = users.filter((user: any) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
     
     if (activeTab === "all") return matchesSearch
-    if (activeTab === "vendors") return matchesSearch && user.role === "Vendor"
-    if (activeTab === "buyers") return matchesSearch && user.role === "Buyer"
-    if (activeTab === "pending") return matchesSearch && user.status === "pending"
+    if (activeTab === "vendors") return matchesSearch && user.role === "agent"
+    if (activeTab === "buyers") return matchesSearch && (user.role === "buyer" || user.role === "user")
+    if (activeTab === "pending") return matchesSearch && computeStatus(user) === "pending"
     
     return matchesSearch
   })
@@ -187,19 +198,25 @@ export default function UserManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => (
+                {isLoading ? (
+                    <tr>
+                        <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                            <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+                        </td>
+                    </tr>
+                ) : filteredUsers.length > 0 ? (
+                  filteredUsers.map((user: any) => (
                     <motion.tr
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      key={user.id}
+                      key={user.id || user._id}
                       className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                     >
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <Avatar>
                             <AvatarImage src={user.avatar} />
-                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                            <AvatarFallback className="uppercase">{user.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
                             <span className="font-medium text-foreground">{user.name}</span>
@@ -208,12 +225,12 @@ export default function UserManagementPage() {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <Badge variant="secondary" className="font-normal">
+                        <Badge variant="secondary" className="font-normal capitalize">
                           {user.role}
                         </Badge>
                       </td>
-                      <td className="py-4 px-6">{getStatusBadge(user.status)}</td>
-                      <td className="py-4 px-6 text-sm text-muted-foreground">{user.joined}</td>
+                      <td className="py-4 px-6">{getStatusBadge(computeStatus(user))}</td>
+                      <td className="py-4 px-6 text-sm text-muted-foreground">{dayjs(user.createdAt).format('MMM D, YYYY')}</td>
                       <td className="py-4 px-6 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -226,17 +243,17 @@ export default function UserManagementPage() {
                             <DropdownMenuItem className="cursor-pointer">View Details</DropdownMenuItem>
                             <DropdownMenuItem className="cursor-pointer">Edit Profile</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {user.status === "pending" && (
-                                <DropdownMenuItem className="cursor-pointer text-emerald-600 focus:text-emerald-700 bg-emerald-50 focus:bg-emerald-100">
+                            {computeStatus(user) === "pending" && (
+                                <DropdownMenuItem onClick={() => handleVerify(user.id || user._id)} className="cursor-pointer text-emerald-600 focus:text-emerald-700 bg-emerald-50 focus:bg-emerald-100">
                                     <ShieldCheck className="w-4 h-4 mr-2" /> Verify User
                                 </DropdownMenuItem>
                             )}
-                            {user.status !== "suspended" ? (
-                                <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+                            {computeStatus(user) !== "suspended" ? (
+                                <DropdownMenuItem onClick={() => handleSuspend(user.id || user._id, true)} className="cursor-pointer text-destructive focus:text-destructive">
                                     <UserX className="w-4 h-4 mr-2" /> Suspend
                                 </DropdownMenuItem>
                             ) : (
-                                <DropdownMenuItem className="cursor-pointer text-emerald-600 focus:text-emerald-700">
+                                <DropdownMenuItem onClick={() => handleSuspend(user.id || user._id, false)} className="cursor-pointer text-emerald-600 focus:text-emerald-700">
                                     <CheckCircle className="w-4 h-4 mr-2" /> Reactivate
                                 </DropdownMenuItem>
                             )}

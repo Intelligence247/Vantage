@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
+import dayjs from "dayjs"
 import {
   Plus,
   Search,
@@ -18,6 +19,7 @@ import {
   Bed,
   Bath,
   Maximize,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,97 +27,64 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { propertyService, Property } from "@/services/property.service"
+import { toast } from "sonner"
 
-const properties = [
-  {
-    id: 1,
-    title: "Luxury 4-Bedroom Duplex",
-    location: "Lekki Phase 1, Lagos",
-    price: "₦85,000,000",
-    type: "For Sale",
-    status: "active",
-    views: 342,
-    leads: 8,
-    beds: 4,
-    baths: 5,
-    sqft: "450",
-    image: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-    createdAt: "Dec 1, 2025",
-  },
-  {
-    id: 2,
-    title: "Modern 3-Bedroom Apartment",
-    location: "Victoria Island, Lagos",
-    price: "₦2,500,000/yr",
-    type: "For Rent",
-    status: "active",
-    views: 218,
-    leads: 5,
-    beds: 3,
-    baths: 3,
-    sqft: "280",
-    image: "/contemporary-penthouse-apartment-lagos.jpg",
-    createdAt: "Nov 28, 2025",
-  },
-  {
-    id: 3,
-    title: "Executive 5-Bedroom Mansion",
-    location: "Banana Island, Lagos",
-    price: "₦450,000,000",
-    type: "For Sale",
-    status: "sold",
-    views: 567,
-    leads: 12,
-    beds: 5,
-    baths: 7,
-    sqft: "850",
-    image: "/waterfront-mansion-banana-island-lagos.jpg",
-    createdAt: "Nov 15, 2025",
-  },
-  {
-    id: 4,
-    title: "Smart Home Apartment",
-    location: "Eko Atlantic, Lagos",
-    price: "₦120,000,000",
-    type: "For Sale",
-    status: "active",
-    views: 189,
-    leads: 4,
-    beds: 3,
-    baths: 4,
-    sqft: "320",
-    image: "/smart-home-apartment-eko-atlantic-lagos.jpg",
-    createdAt: "Nov 10, 2025",
-  },
-  {
-    id: 5,
-    title: "Garden Terrace House",
-    location: "Maitama, Abuja",
-    price: "₦95,000,000",
-    type: "For Sale",
-    status: "pending",
-    views: 256,
-    leads: 6,
-    beds: 4,
-    baths: 4,
-    sqft: "400",
-    image: "/garden-terrace-house-maitama-abuja.jpg",
-    createdAt: "Nov 5, 2025",
-  },
-]
+
 
 export default function MyPropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [properties, setProperties] = useState<Property[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadProperties = async () => {
+      try {
+          setIsLoading(true)
+          const data = await propertyService.getAgentProperties(1, 100) // Load up to 100 for basic view
+          setProperties(data.properties)
+      } catch (error) {
+          console.error("Failed to fetch properties:", error)
+          toast.error("Could not lead properties.")
+      } finally {
+          setIsLoading(false)
+      }
+  }
+
+  useEffect(() => {
+      loadProperties()
+  }, [])
 
   const filteredProperties = properties.filter((property) => {
+    const locString = `${property.address} ${property.city} ${property.area} ${property.state}`.toLowerCase()
     const matchesSearch =
       property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.location.toLowerCase().includes(searchQuery.toLowerCase())
+      locString.includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || property.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  const handleDelete = async (id: string) => {
+      if (!confirm("Are you sure you want to delete this property? This action cannot be undone.")) return;
+      try {
+          await propertyService.deleteProperty(id)
+          toast.success("Property deleted successfully")
+          loadProperties()
+      } catch (error) {
+          console.error(error)
+          toast.error("Failed to delete property")
+      }
+  }
+
+  // Format price
+  const formatPrice = (price: number, type: string, paymentPeriod?: string) => {
+    const amount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(price);
+    if (type === 'rent' || type === 'shortlet') {
+        return paymentPeriod ? `${amount}/${paymentPeriod}` : `${amount}/yr`;
+    }
+    return amount;
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -129,7 +98,7 @@ export default function MyPropertiesPage() {
           <h1 className="font-heading text-2xl lg:text-3xl font-bold text-foreground">My Properties</h1>
           <p className="text-muted-foreground mt-1">Manage and track all your property listings</p>
         </div>
-        <Link href="/dashboard/properties/new">
+        <Link href="/dashboard/vendor/properties/new">
           <Button className="bg-accent hover:bg-accent-hover text-primary font-semibold gap-2 shadow-lg shadow-accent/20">
             <Plus className="w-5 h-5" />
             Add Property
@@ -161,7 +130,7 @@ export default function MyPropertiesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="available">Live</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="sold">Sold</SelectItem>
             </SelectContent>
@@ -188,7 +157,11 @@ export default function MyPropertiesPage() {
       </motion.div>
 
       {/* Properties Grid/List */}
-      {viewMode === "grid" ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-10 h-10 animate-spin text-accent" />
+        </div>
+      ) : viewMode === "grid" ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -205,27 +178,27 @@ export default function MyPropertiesPage() {
               <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 group">
                 <div className="relative h-48 overflow-hidden">
                   <Image
-                    src={property.image || "/placeholder.svg"}
+                    src={property.images?.[0]?.url || "/placeholder.svg"}
                     alt={property.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute top-3 left-3 flex gap-2">
                     <Badge
-                      className={property.type === "For Sale" ? "bg-accent text-primary" : "bg-primary text-white"}
+                      className={property.type === "sale" ? "bg-accent text-primary" : "bg-primary text-white"}
                     >
-                      {property.type}
+                      {property.type === 'sale' ? 'For Sale' : property.type === 'shortlet' ? 'Short Let' : 'For Rent'}
                     </Badge>
                     <Badge
                       className={
-                        property.status === "active"
+                        property.status === "available"
                           ? "bg-emerald-500 text-white"
                           : property.status === "pending"
                             ? "bg-amber-500 text-white"
                             : "bg-slate-500 text-white"
                       }
                     >
-                      {property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+                      {property.status?.charAt(0).toUpperCase() + property.status?.slice(1)}
                     </Badge>
                   </div>
                   <div className="absolute top-3 right-3">
@@ -236,15 +209,19 @@ export default function MyPropertiesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2 cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                          View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 cursor-pointer">
-                          <Pencil className="w-4 h-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                        <Link href={`/properties/${property.id}`}>
+                          <DropdownMenuItem className="gap-2 cursor-pointer">
+                            <Eye className="w-4 h-4" />
+                            View
+                          </DropdownMenuItem>
+                        </Link>
+                        <Link href={`/dashboard/vendor/properties/${property.id}/edit`}>
+                          <DropdownMenuItem className="gap-2 cursor-pointer">
+                            <Pencil className="w-4 h-4" />
+                            Edit
+                          </DropdownMenuItem>
+                        </Link>
+                        <DropdownMenuItem onClick={() => handleDelete(property.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                           <Trash2 className="w-4 h-4" />
                           Delete
                         </DropdownMenuItem>
@@ -255,29 +232,29 @@ export default function MyPropertiesPage() {
                 <CardContent className="p-4">
                   <h3 className="font-heading font-semibold text-foreground truncate">{property.title}</h3>
                   <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
-                    <MapPin className="w-4 h-4" />
-                    <span className="truncate">{property.location}</span>
+                    <MapPin className="w-4 h-4 text-accent" />
+                    <span className="truncate">{property.city ? `${property.city}, ${property.state}` : property.state}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Bed className="w-4 h-4" />
-                      {property.beds}
+                      {property.beds || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Bath className="w-4 h-4" />
-                      {property.baths}
+                      {property.baths || 0}
                     </span>
                     <span className="flex items-center gap-1">
                       <Maximize className="w-4 h-4" />
-                      {property.sqft}m²
+                      {property.sqft || 0}m²
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                    <span className="font-heading font-bold text-lg text-foreground">{property.price}</span>
+                    <span className="font-heading font-bold text-lg text-foreground">{formatPrice(property.price, property.type, property.paymentPeriod)}</span>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Eye className="w-4 h-4" />
-                        {property.views}
+                        {property.views || 0}
                       </span>
                     </div>
                   </div>
@@ -299,16 +276,16 @@ export default function MyPropertiesPage() {
                 <div className="flex flex-col sm:flex-row">
                   <div className="relative w-full sm:w-48 h-48 sm:h-auto flex-shrink-0">
                     <Image
-                      src={property.image || "/placeholder.svg"}
+                      src={property.images?.[0]?.url || "/placeholder.svg"}
                       alt={property.title}
                       fill
                       className="object-cover"
                     />
                     <div className="absolute top-3 left-3 flex gap-2 sm:flex-col">
                       <Badge
-                        className={property.type === "For Sale" ? "bg-accent text-primary" : "bg-primary text-white"}
+                        className={property.type === "sale" ? "bg-accent text-primary" : "bg-primary text-white"}
                       >
-                        {property.type}
+                        {property.type === 'sale' ? 'For Sale' : property.type === 'shortlet' ? 'Short Let' : 'For Rent'}
                       </Badge>
                     </div>
                   </div>
@@ -321,54 +298,63 @@ export default function MyPropertiesPage() {
                           </h3>
                           <Badge
                             className={
-                              property.status === "active"
+                              property.status === "available"
                                 ? "bg-emerald-500/10 text-emerald-600"
                                 : property.status === "pending"
                                   ? "bg-amber-500/10 text-amber-600"
                                   : "bg-slate-500/10 text-slate-600"
                             }
                           >
-                            {property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+                            {property.status?.charAt(0).toUpperCase() + property.status?.slice(1)}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
-                          <MapPin className="w-4 h-4" />
-                          <span>{property.location}</span>
+                          <MapPin className="w-4 h-4 text-accent" />
+                          <span>{property.city ? `${property.city}, ${property.state}` : property.state}</span>
                         </div>
                         <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Bed className="w-4 h-4" />
-                            {property.beds} beds
+                            {property.beds || 0} beds
                           </span>
                           <span className="flex items-center gap-1">
                             <Bath className="w-4 h-4" />
-                            {property.baths} baths
+                            {property.baths || 0} baths
                           </span>
                           <span className="flex items-center gap-1">
                             <Maximize className="w-4 h-4" />
-                            {property.sqft}m²
+                            {property.sqft || 0}m²
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="font-heading font-bold text-xl text-foreground">{property.price}</span>
+                        <span className="font-heading font-bold text-xl text-foreground">{formatPrice(property.price, property.type, property.paymentPeriod)}</span>
                         <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground justify-end">
                           <span className="flex items-center gap-1">
                             <Eye className="w-4 h-4" />
-                            {property.views} views
+                            {property.views || 0} views
                           </span>
-                          <span>{property.leads} leads</span>
+                          <span>{property.leads || 0} leads</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                      <span className="text-sm text-muted-foreground">Added {property.createdAt}</span>
+                      <span className="text-sm text-muted-foreground">Added {dayjs(property.createdAt).format('MMM D, YYYY')}</span>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="gap-1 bg-transparent">
-                          <Pencil className="w-4 h-4" />
-                          Edit
-                        </Button>
+                        <Link href={`/properties/${property.id}`}>
+                            <Button variant="outline" size="sm" className="gap-1 bg-transparent">
+                            <Eye className="w-4 h-4" />
+                            View
+                            </Button>
+                        </Link>
+                        <Link href={`/dashboard/vendor/properties/${property.id}/edit`}>
+                          <Button variant="outline" size="sm" className="gap-1 bg-transparent text-foreground">
+                            <Pencil className="w-4 h-4" />
+                            Edit
+                          </Button>
+                        </Link>
                         <Button
+                          onClick={() => handleDelete(property.id)}
                           variant="outline"
                           size="sm"
                           className="gap-1 text-destructive hover:text-destructive bg-transparent"

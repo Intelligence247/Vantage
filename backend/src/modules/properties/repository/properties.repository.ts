@@ -55,7 +55,7 @@ export class PropertiesRepository {
     data: UpdateQuery<Property>,
   ): Promise<PropertyDocument | null> {
     return this.propertyModel
-      .findByIdAndUpdate(id, data, { new: true })
+      .findByIdAndUpdate(id, data, { returnDocument: 'after' })
       .populate('agent', 'name email phone avatar isVerified role')
       .exec();
   }
@@ -84,7 +84,7 @@ export class PropertiesRepository {
       .findByIdAndUpdate(
         propertyId,
         { $addToSet: { favoritedBy: userId } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .exec();
   }
@@ -97,7 +97,7 @@ export class PropertiesRepository {
       .findByIdAndUpdate(
         propertyId,
         { $pull: { favoritedBy: userId } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .exec();
   }

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { inquiryService, Inquiry } from "@/services/inquiry.service"
+import { useInquirySocket } from "@/hooks/use-inquiry-socket"
 import { toast } from "sonner"
 import dayjs from "dayjs"
 import relativeTime from "dayjs/plugin/relativeTime"
@@ -17,9 +18,11 @@ import relativeTime from "dayjs/plugin/relativeTime"
 dayjs.extend(relativeTime)
 
 export default function BuyerInboxPage() {
+  const [messageText, setMessageText] = useState("")
+  const [isSending, setIsSending] = useState(false)
+
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [selectedInquiry, setSelectedInquiry] = useState<Inquiry | null>(null)
-  const [messageText, setMessageText] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
 
@@ -42,6 +45,40 @@ export default function BuyerInboxPage() {
   useEffect(() => {
     fetchInquiries()
   }, [])
+
+  useInquirySocket((inquiry) => {
+    const id = inquiry.id || inquiry._id
+    if (!id) return
+    setInquiries((prev) => {
+      const idx = prev.findIndex((i) => (i.id || i._id) === id)
+      if (idx === -1) return [inquiry, ...prev]
+      const next = [...prev]
+      next[idx] = inquiry
+      return next
+    })
+    setSelectedInquiry((prev) => {
+      if (!prev) return prev
+      if ((prev.id || prev._id) === id) return inquiry
+      return prev
+    })
+  })
+
+  const handleSendMessage = async () => {
+    if (!selectedInquiry || !messageText.trim()) return
+    const inquiryId = selectedInquiry.id || selectedInquiry._id
+    if (!inquiryId) return
+    try {
+      setIsSending(true)
+      const updated = await inquiryService.sendMessage(inquiryId, messageText.trim())
+      setInquiries((prev) => prev.map((inq) => ((inq.id || inq._id) === inquiryId ? updated : inq)))
+      setSelectedInquiry(updated)
+      setMessageText("")
+    } catch (error) {
+      toast.error("Failed to send message")
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   const filteredInquiries = inquiries.filter((inquiry) => {
     const propName = typeof inquiry.property === 'object' ? inquiry.property.title : String(inquiry.property)
@@ -85,11 +122,11 @@ export default function BuyerInboxPage() {
                 </div>
             ) : filteredInquiries.map((inquiry) => {
               const propTitle = typeof inquiry.property === 'object' ? inquiry.property.title : `Property ${inquiry.property}`
-              const isSelected = selectedInquiry?._id === inquiry._id
+              const isSelected = (selectedInquiry?.id || selectedInquiry?._id) === (inquiry.id || inquiry._id)
               
               return (
               <div
-                key={inquiry._id}
+                key={inquiry.id || inquiry._id}
                 onClick={() => setSelectedInquiry(inquiry)}
                 className={`
                   flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors
@@ -117,7 +154,7 @@ export default function BuyerInboxPage() {
                     <Badge variant="secondary" className="text-[10px] px-1.5 h-5 font-normal capitalize">
                         {inquiry.status}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground truncate capitalize">• {inquiry.type}</span>
+                    <span className="text-[10px] text-muted-foreground truncate capitalize">• Inquiry</span>
                   </div>
                 </div>
               </div>
@@ -146,7 +183,7 @@ export default function BuyerInboxPage() {
                 {typeof selectedInquiry.property === 'object' ? selectedInquiry.property.title : `Property ${selectedInquiry.property}`}
               </h2>
               <p className="text-xs text-muted-foreground flex items-center gap-1 capitalize">
-                Status: {selectedInquiry.status} • Type: {selectedInquiry.type}
+                Status: {selectedInquiry.status}
               </p>
             </div>
           </div>
@@ -173,18 +210,31 @@ export default function BuyerInboxPage() {
               </Badge>
             </div>
             
-            {/* The single initial inquiry message from the buyer */}
-            <div className={`flex justify-end`}>
-                <div className={`flex flex-col items-end max-w-[75%]`}>
-                    <div className={`rounded-2xl px-4 py-3 shadow-sm bg-primary text-primary-foreground rounded-br-none`}>
-                        <p className="text-sm leading-relaxed">{selectedInquiry.message}</p>
+            {(selectedInquiry.messages?.length
+              ? selectedInquiry.messages
+              : [{ senderRole: "buyer", body: selectedInquiry.message, createdAt: selectedInquiry.createdAt }]
+            ).map((msg, idx) => {
+              const isBuyer = msg.senderRole === "buyer"
+              return (
+                <div key={`${msg.createdAt}-${idx}`} className={`flex ${isBuyer ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex flex-col max-w-[75%] ${isBuyer ? "items-end" : "items-start"}`}>
+                    <div
+                      className={`rounded-2xl px-4 py-3 shadow-sm ${
+                        isBuyer
+                          ? "bg-primary text-primary-foreground rounded-br-none"
+                          : "bg-white text-foreground rounded-bl-none border"
+                      }`}
+                    >
+                      <p className="text-sm leading-relaxed">{msg.body}</p>
                     </div>
                     <div className="flex items-center gap-1 mt-1 px-1">
-                        <span className="text-[10px] text-muted-foreground">{dayjs(selectedInquiry.createdAt).format('h:mm A')}</span>
-                        <Check className="w-3 h-3 text-emerald-500" />
+                      <span className="text-[10px] text-muted-foreground">{dayjs(msg.createdAt).format("h:mm A")}</span>
+                      {isBuyer && <Check className="w-3 h-3 text-emerald-500" />}
                     </div>
+                  </div>
                 </div>
-            </div>
+              )
+            })}
           </div>
         </ScrollArea>
         </>
@@ -194,10 +244,9 @@ export default function BuyerInboxPage() {
             </div>
         )}
 
-        {/* Input Area */}
         <div className="p-4 border-t bg-card">
           <div className="max-w-3xl mx-auto bg-background border rounded-xl flex items-end p-2 gap-2 shadow-sm focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-10 w-10 flex-shrink-0">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-10 w-10 shrink-0">
               <Paperclip className="w-5 h-5" />
             </Button>
             <Textarea
@@ -207,8 +256,13 @@ export default function BuyerInboxPage() {
               className="border-0 focus-visible:ring-0 min-h-[44px] max-h-32 resize-none py-2.5 px-0 bg-transparent flex-1"
               rows={1}
             />
-            <Button className="bg-accent hover:bg-accent-hover text-primary h-10 w-10 flex-shrink-0 rounded-lg" size="icon">
-              <Send className="w-5 h-5" />
+            <Button
+              className="bg-accent hover:bg-accent-hover text-primary h-10 w-10 shrink-0 rounded-lg"
+              size="icon"
+              disabled={!selectedInquiry || !messageText.trim() || isSending}
+              onClick={handleSendMessage}
+            >
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </div>
         </div>

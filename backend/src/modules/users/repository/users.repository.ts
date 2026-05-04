@@ -48,7 +48,7 @@ export class UsersRepository {
     data: UpdateQuery<User>,
   ): Promise<UserDocument | null> {
     return this.userModel
-      .findByIdAndUpdate(id, data, { new: true })
+      .findByIdAndUpdate(id, data, { returnDocument: 'after' })
       .exec();
   }
 

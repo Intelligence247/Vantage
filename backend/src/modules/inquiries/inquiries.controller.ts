@@ -18,8 +18,12 @@ import { InquiriesService } from './inquiries.service';
 import {
   CreateInquiryDto,
   ContactFormDto,
+  ReplyInquiryDto,
+  SendMessageDto,
   createInquirySchema,
   contactFormSchema,
+  replyInquirySchema,
+  sendMessageSchema,
 } from './dto/inquiry.dto';
 import { CurrentUser, JwtPayload, Public, Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -108,5 +112,33 @@ export class InquiriesController {
     @Body('status') status: string,
   ) {
     return this.inquiriesService.updateInquiryStatus(id, status);
+  }
+
+  @Post('inquiries/:id/reply')
+  @UseGuards(RolesGuard)
+  @Roles(Role.AGENT, Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reply to an inquiry' })
+  @ApiParam({ name: 'id', description: 'Inquiry ID' })
+  async replyToInquiry(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: ReplyInquiryDto,
+  ) {
+    const validated = zodValidate(replyInquirySchema, body);
+    return this.inquiriesService.replyToInquiry(id, user.sub, validated);
+  }
+
+  @Post('inquiries/:id/messages')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send a conversation message in inquiry thread' })
+  @ApiParam({ name: 'id', description: 'Inquiry ID' })
+  async sendMessage(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: SendMessageDto,
+  ) {
+    const validated = zodValidate(sendMessageSchema, body);
+    return this.inquiriesService.sendMessage(id, user, validated.message);
   }
 }

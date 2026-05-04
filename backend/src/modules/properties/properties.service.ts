@@ -13,12 +13,16 @@ import {
   UpdatePropertyInput,
   PropertyQueryInput,
 } from './dto/property.dto';
-import { Property } from './schema/property.schema';
+import { Property, PropertyStatus } from './schema/property.schema';
+import { MailService } from '../mail/mail.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class PropertiesService {
   constructor(
     private readonly propertiesRepository: PropertiesRepository,
+    private readonly mailService: MailService,
+    private readonly usersService: UsersService,
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
   ) {}
 
@@ -28,12 +32,25 @@ export class PropertiesService {
   ): Promise<PropertyDocument> {
     const property = await this.propertiesRepository.create({
       ...input,
+      status: PropertyStatus.PENDING, // Strictly enforce pending state for Admin review
       agent: agentId as unknown as Property['agent'],
     });
-    this.logger.info('Property created', {
+
+    this.logger.info('Property created (Pending Review)', {
       propertyId: property.id,
       agentId,
     });
+
+    // Alert the admin
+    try {
+      const vendor = await this.usersService.findById(agentId);
+      this.mailService.sendAdminPropertyAlert(vendor.name, property.title).catch(e => {
+          this.logger.error('Failed to send async Admin Property Alert', e);
+      });
+    } catch (error) {
+      this.logger.error('Failed to lookup vendor during property creation alert', error);
+    }
+
     return property;
   }
 
@@ -281,6 +298,20 @@ export class PropertiesService {
     return property;
   }
 
+  async updatePropertyStatus(
+    id: string,
+    status: 'available' | 'sold' | 'active' | 'pending',
+  ): Promise<PropertyDocument> {
+    const property = await this.propertiesRepository.update(id, {
+      status,
+    });
+    if (!property) {
+      throw new NotFoundException('Property not found');
+    }
+    this.logger.info('Property status changed dynamically', { propertyId: id, status });
+    return property;
+  }
+
   async getPendingProperties(
     page = 1,
     limit = 20,
@@ -317,6 +348,10 @@ export class PropertiesService {
         { city: { $regex: query.search, $options: 'i' } },
         { state: { $regex: query.search, $options: 'i' } },
       ];
+    }
+
+    if (query.agent) {
+      filter.agent = query.agent;
     }
 
     if (query.type) {

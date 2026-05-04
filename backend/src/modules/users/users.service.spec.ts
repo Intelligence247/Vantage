@@ -4,6 +4,7 @@ import { UsersService } from './users.service';
 import { UsersRepository } from './repository/users.repository';
 import { Role } from '../../common/enums/role.enum';
 import * as bcrypt from 'bcrypt';
+import { MailService } from '../mail/mail.service';
 
 const mockUsersRepository = {
   create: jest.fn(),
@@ -23,6 +24,10 @@ const mockLogger = {
   warn: jest.fn(),
 };
 
+const mockMailService = {
+  sendAdminVendorAlert: jest.fn(),
+};
+
 describe('UsersService', () => {
   let service: UsersService;
 
@@ -31,6 +36,7 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: UsersRepository, useValue: mockUsersRepository },
+        { provide: MailService, useValue: mockMailService },
         { provide: 'winston', useValue: mockLogger },
       ],
     }).compile();

@@ -2,10 +2,10 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { User, Mail, Phone, MapPin, Building2, Camera, Bell, Shield, CreditCard, Trash2, Save } from "lucide-react"
+import { User, Mail, Phone, MapPin, Building2, Camera, Bell, Shield, CreditCard, Trash2, Save, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,14 +14,166 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { userService, UserProfile } from "@/services/user.service"
+import { propertyService } from "@/services/property.service"
+import { toast } from "sonner"
+import { useRef } from "react"
 
 export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isUploadingKyc, setIsUploadingKyc] = useState(false)
+  const [isSubmittingKyc, setIsSubmittingKyc] = useState(false)
+  const [kycDocument, setKycDocument] = useState<{ url: string; publicId?: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [phone, setPhone] = useState("")
+
+  // Security
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+
+  // Notifications
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: true,
+    sms: false,
+  })
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setIsLoading(true)
+        const data = await userService.getProfile()
+        setProfile(data)
+        const nameParts = data.name.split(" ")
+        setFirstName(nameParts[0] || "")
+        setLastName(nameParts.slice(1).join(" ") || "")
+        setPhone(data.phone || "")
+        if (data.verificationDocument) {
+          setKycDocument({
+            url: data.verificationDocument,
+            publicId: data.verificationDocPublicId,
+          })
+        }
+      } catch (error) {
+        console.error("Failed to fetch profile", error)
+        toast.error("Could not lead profile data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchProfile()
+  }, [])
 
   const handleSave = async () => {
-    setIsSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSaving(false)
+    try {
+      setIsSaving(true)
+      await userService.updateProfile({ 
+        name: `${firstName} ${lastName}`.trim(), 
+        phone,
+        avatar: profile?.avatar || ""
+      })
+      await userService.updateNotifications({
+        email: notifications.email,
+        push: notifications.push,
+        sms: notifications.sms,
+      })
+      toast.success("Settings updated successfully")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to update profile")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleKycUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setIsUploadingKyc(true)
+      const uploaded = await propertyService.uploadSingleImage(file)
+      setKycDocument({ url: uploaded.url, publicId: uploaded.publicId })
+      toast.success("KYC file uploaded. Click submit to send for verification.")
+    } catch (error) {
+      toast.error("Failed to upload KYC file")
+    } finally {
+      setIsUploadingKyc(false)
+    }
+  }
+
+  const handleKycSubmit = async () => {
+    if (!kycDocument?.url) {
+      toast.error("Upload a KYC document first")
+      return
+    }
+    try {
+      setIsSubmittingKyc(true)
+      await userService.uploadKycDocument({
+        verificationDocument: kycDocument.url,
+        verificationDocPublicId: kycDocument.publicId,
+      })
+      toast.success("KYC submitted successfully. Admin will review your document.")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to submit KYC")
+    } finally {
+      setIsSubmittingKyc(false)
+    }
+  }
+
+  const handlePasswordChange = async () => {
+    if (newPassword !== confirmPassword) {
+        toast.error("New passwords do not match")
+        return
+    }
+    if (!currentPassword || !newPassword) {
+        toast.error("Please fill in all password fields")
+        return
+    }
+    try {
+        setIsChangingPassword(true)
+        await userService.updatePassword({ currentPassword, newPassword })
+        toast.success("Password updated successfully!")
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+    } catch (e: any) {
+        toast.error(e.response?.data?.message || "Failed to update password")
+    } finally {
+        setIsChangingPassword(false)
+    }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !profile) return
+
+    try {
+        setIsUploadingAvatar(true)
+        const data = await propertyService.uploadSingleImage(file)
+        setProfile({ ...profile, avatar: data.url })
+        toast.success("Image uploaded. Remember to save your settings!")
+    } catch (error) {
+        console.error(error)
+        toast.error("Failed to upload avatar")
+    } finally {
+        setIsUploadingAvatar(false)
+    }
+  }
+
+  if (isLoading || !profile) {
+      return (
+          <div className="flex justify-center items-center h-[60vh]">
+              <Loader2 className="w-10 h-10 animate-spin text-accent" />
+          </div>
+      )
   }
 
   return (
@@ -55,6 +207,38 @@ export default function SettingsPage() {
 
           {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading text-lg">KYC Verification</CardTitle>
+                <CardDescription>Upload a verification document for admin approval</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  Accepted documents: national ID, passport, or driver's license.
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input type="file" accept="image/*,.pdf" onChange={handleKycUpload} />
+                  {kycDocument?.url && (
+                    <a
+                      href={kycDocument.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm underline text-primary"
+                    >
+                      View uploaded document
+                    </a>
+                  )}
+                </div>
+                <Button onClick={handleKycSubmit} disabled={isUploadingKyc || isSubmittingKyc || !kycDocument?.url}>
+                  {isUploadingKyc
+                    ? "Uploading..."
+                    : isSubmittingKyc
+                    ? "Submitting..."
+                    : "Submit KYC for Review"}
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* Avatar Section */}
             <Card>
               <CardHeader>
@@ -64,27 +248,33 @@ export default function SettingsPage() {
               <CardContent>
                 <div className="flex items-center gap-6">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-full overflow-hidden bg-muted">
-                      <Image
-                        src="/professional-nigerian-real-estate-agent-portrait.jpg"
-                        alt="Profile"
-                        width={96}
-                        height={96}
-                        className="object-cover"
-                      />
+                    <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center relative border-2 border-border bg-muted">
+                        {profile?.avatar ? (
+                            <Image src={profile.avatar} alt="Avatar" fill className="object-cover" />
+                        ) : (
+                            <span className="font-bold text-3xl text-primary capitalize">{(profile.name || "U")[0]}</span>
+                        )}
+                        {isUploadingAvatar && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            </div>
+                        )}
                     </div>
                     <Button
                       size="icon"
-                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-accent hover:bg-accent-hover text-primary"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-accent hover:bg-accent-hover text-primary z-10"
                     >
                       <Camera className="w-4 h-4" />
                     </Button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">Chidi Okonkwo</p>
-                    <p className="text-sm text-muted-foreground">Verified Agent since 2023</p>
-                    <Button variant="outline" size="sm" className="mt-2 bg-transparent">
-                      Change Photo
+                    <p className="font-medium text-foreground">{profile.name}</p>
+                    <p className="text-sm text-muted-foreground">{profile.role === 'admin' ? 'Admin' : 'Verified Agent'}</p>
+                    <Button variant="outline" size="sm" className="mt-2 bg-transparent" onClick={() => fileInputRef.current?.click()} disabled={isUploadingAvatar}>
+                      {isUploadingAvatar ? "Uploading..." : "Change Photo"}
                     </Button>
                   </div>
                 </div>
@@ -101,11 +291,11 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" defaultValue="Chidi" className="mt-1.5" />
+                    <Input id="firstName" value={firstName} onChange={e => setFirstName(e.target.value)} className="mt-1.5" />
                   </div>
                   <div>
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" defaultValue="Okonkwo" className="mt-1.5" />
+                    <Input id="lastName" value={lastName} onChange={e => setLastName(e.target.value)} className="mt-1.5" />
                   </div>
                 </div>
                 <div>
@@ -113,14 +303,14 @@ export default function SettingsPage() {
                     <Mail className="w-4 h-4 text-muted-foreground" />
                     Email Address
                   </Label>
-                  <Input id="email" type="email" defaultValue="chidi.okonkwo@email.com" className="mt-1.5" />
+                  <Input id="email" type="email" value={profile.email} disabled className="mt-1.5" />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground" />
                     Phone Number
                   </Label>
-                  <Input id="phone" defaultValue="+234 803 123 4567" className="mt-1.5" />
+                  <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1.5" />
                 </div>
                 <div>
                   <Label htmlFor="bio">Bio</Label>
@@ -203,37 +393,20 @@ export default function SettingsPage() {
                 <CardDescription>Manage your email notification preferences</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  {
-                    label: "New lead inquiries",
-                    description: "Get notified when someone inquires about your property",
-                    default: true,
-                  },
-                  { label: "Messages", description: "Receive email notifications for new messages", default: true },
-                  {
-                    label: "Property views milestone",
-                    description: "Get notified when your property reaches view milestones",
-                    default: false,
-                  },
-                  {
-                    label: "Weekly performance report",
-                    description: "Receive a weekly summary of your property performance",
-                    default: true,
-                  },
-                  {
-                    label: "Marketing tips",
-                    description: "Tips and best practices to improve your listings",
-                    default: false,
-                  },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div className="flex items-center justify-between py-3 border-b last:border-0" key="NewLeadInquiries">
                     <div>
-                      <p className="font-medium text-foreground">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="font-medium text-foreground">Lead Inquiries & Messages</p>
+                      <p className="text-sm text-muted-foreground">Receive incoming emails about properties</p>
                     </div>
-                    <Switch defaultChecked={item.default} />
+                    <Switch checked={notifications.email} onCheckedChange={(val) => setNotifications(prev => ({...prev, email: val}))} />
                   </div>
-                ))}
+                  <div className="flex items-center justify-between py-3 border-b last:border-0" key="WeeklyReports">
+                    <div>
+                      <p className="font-medium text-foreground">Weekly performance report</p>
+                      <p className="text-sm text-muted-foreground">Receive a weekly summary of your property performance</p>
+                    </div>
+                    <Switch checked={notifications.email} onCheckedChange={(val) => setNotifications(prev => ({...prev, email: val}))} />
+                  </div>
               </CardContent>
             </Card>
 
@@ -243,25 +416,26 @@ export default function SettingsPage() {
                 <CardDescription>Manage your push notification preferences</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  {
-                    label: "Real-time lead alerts",
-                    description: "Instant notifications for new inquiries",
-                    default: true,
-                  },
-                  { label: "Chat messages", description: "Get notified of new chat messages", default: true },
-                  { label: "Property updates", description: "Updates about your listed properties", default: false },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div className="flex items-center justify-between py-3 border-b last:border-0" key="BookingReminders">
                     <div>
-                      <p className="font-medium text-foreground">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="font-medium text-foreground">Inspection Reminders (SMS/Push)</p>
+                      <p className="text-sm text-muted-foreground">Reminders for upcoming property visits</p>
                     </div>
-                    <Switch defaultChecked={item.default} />
+                    <Switch checked={notifications.sms} onCheckedChange={(val) => setNotifications(prev => ({...prev, sms: val}))} />
                   </div>
-                ))}
+                  <div className="flex items-center justify-between py-3 border-b last:border-0" key="ChatMessagesPush">
+                    <div>
+                      <p className="font-medium text-foreground">Chat messages (Push)</p>
+                      <p className="text-sm text-muted-foreground">Get notified of new chat messages</p>
+                    </div>
+                    <Switch checked={notifications.push} onCheckedChange={(val) => setNotifications(prev => ({...prev, push: val}))} />
+                  </div>
               </CardContent>
             </Card>
+            
+            <Button onClick={handleSave} disabled={isSaving} className="w-full bg-accent hover:bg-accent-hover text-primary font-semibold mt-4">
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Save Notifications"}
+            </Button>
           </TabsContent>
 
           {/* Security Tab */}
@@ -274,17 +448,23 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" className="mt-1.5" />
+                  <Input id="currentPassword" type="password" className="mt-1.5" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" className="mt-1.5" />
+                  <Input id="newPassword" type="password" className="mt-1.5" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input id="confirmPassword" type="password" className="mt-1.5" />
+                  <Input id="confirmPassword" type="password" className="mt-1.5" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                 </div>
-                <Button className="bg-primary hover:bg-primary-light">Update Password</Button>
+                <Button 
+                    onClick={handlePasswordChange}
+                    disabled={isChangingPassword}
+                    className="bg-primary hover:bg-primary-light"
+                >
+                    {isChangingPassword ? "Updating..." : "Update Password"}
+                </Button>
               </CardContent>
             </Card>
 

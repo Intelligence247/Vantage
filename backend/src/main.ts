@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
@@ -14,6 +15,8 @@ async function bootstrap() {
     bodyParser: false,
   });
 
+  app.useWebSocketAdapter(new IoAdapter(app));
+
   const configService = app.get(ConfigService);
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
@@ -28,6 +31,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.get<string>('cors.origin'),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
   });
 
@@ -61,7 +65,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
+  SwaggerModule.setup('api-docs', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
     },
@@ -73,7 +77,7 @@ async function bootstrap() {
   const appLogger = app.get(WINSTON_MODULE_NEST_PROVIDER);
   appLogger.log(`Sovereign Estate API running on port ${port}`);
   appLogger.log(
-    `Swagger documentation available at http://localhost:${port}/api/docs`,
+    `Swagger documentation available at http://localhost:${port}/api-docs`,
   );
 }
 bootstrap();

@@ -7,14 +7,12 @@ import Link from "next/link"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Check } from "lucide-react"
-import { useAuth } from "../../context/AuthContext"
 import { authService } from "../../services/auth.service"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
@@ -48,14 +46,8 @@ export default function RegisterPage() {
       }
       
       const authData = await authService.register(payload)
-      toast.success("Account created successfully!")
-      
-      // Auto-login the user after registration if the API returns tokens
-      if (authData.tokens?.accessToken) {
-        login(authData)
-      } else {
-        router.push("/login")
-      }
+      toast.success("Account created successfully. Verify your email OTP to continue.")
+      router.push(`/verify-email?email=${encodeURIComponent(authData.user.email)}`)
     } catch (error: any) {
       console.error("Registration failed", error)
       toast.error(error.response?.data?.message || "Registration failed. Please try again.")

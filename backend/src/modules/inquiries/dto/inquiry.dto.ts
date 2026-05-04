@@ -62,3 +62,25 @@ export class ContactFormDto {
   @ApiProperty({ example: 'I have a question about...' })
   message!: string;
 }
+
+export const replyInquirySchema = z.object({
+  message: z.string().min(2, 'Reply must be at least 2 characters'),
+});
+
+export type ReplyInquiryInput = z.infer<typeof replyInquirySchema>;
+
+export class ReplyInquiryDto {
+  @ApiProperty({ example: 'Thanks for reaching out! We can schedule an inspection tomorrow.' })
+  message!: string;
+}
+
+export const sendMessageSchema = z.object({
+  message: z.string().min(1, 'Message is required').max(2000),
+});
+
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+export class SendMessageDto {
+  @ApiProperty({ example: 'Hello, is this property still available?' })
+  message!: string;
+}

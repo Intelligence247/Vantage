@@ -12,6 +12,8 @@ import { PropertiesModule } from './modules/properties/properties.module';
 import { InquiriesModule } from './modules/inquiries/inquiries.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CloudinaryModule } from './modules/cloudinary/cloudinary.module';
+import { MailModule } from './modules/mail/mail.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AppController } from './app.controller';
@@ -39,6 +41,8 @@ import { AppService } from './app.service';
     InquiriesModule,
     AdminModule,
     CloudinaryModule,
+    MailModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

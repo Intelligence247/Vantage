@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import {
@@ -8,11 +8,11 @@ import {
   Filter,
   MoreHorizontal,
   CheckCircle,
-  XCircle,
   Eye,
   MapPin,
   Building2,
   AlertTriangle,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,85 +21,83 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// Mock Properties Data
-const propertiesData = [
-  {
-    id: 1,
-    title: "Luxury 5-Bed Detached Duplex",
-    location: "Ikoyi, Lagos",
-    price: "₦850,000,000",
-    agent: "Prime Real Estate",
-    status: "pending",
-    date: "2 hours ago",
-    image: "/waterfront-mansion-banana-island-lagos.jpg",
-    type: "Sale",
-  },
-  {
-    id: 2,
-    title: "Executive 3-Bedroom Apartment",
-    location: "Victoria Island, Lagos",
-    price: "₦15,000,000/yr",
-    agent: "Lagos Homes",
-    status: "active",
-    date: "1 day ago",
-    image: "/contemporary-penthouse-apartment-lagos.jpg",
-    type: "Rent",
-  },
-  {
-    id: 3,
-    title: "Commercial Office Comp.",
-    location: "Lekki Phase 1, Lagos",
-    price: "₦45,000,000/yr",
-    agent: "CBRE Nigeria",
-    status: "active",
-    date: "2 days ago",
-    image: "/modern-luxury-duplex-house-exterior-lagos.jpg",
-    type: "Rent",
-  },
-  {
-    id: 4,
-    title: "Unfinished Building Block",
-    location: "Ajah, Lagos",
-    price: "₦120,000,000",
-    agent: "Independent Agent",
-    status: "rejected",
-    date: "5 days ago",
-    image: "/placeholder.svg", // Assuming a placeholder for now
-    type: "Sale",
-  },
-]
+import { propertyService, Property } from "@/services/property.service"
+import { adminService } from "@/services/admin.service"
+import { toast } from "sonner"
+import dayjs from "dayjs"
+import relativeTime from "dayjs/plugin/relativeTime"
+import Link from "next/link"
+
+dayjs.extend(relativeTime)
 
 export default function AdminPropertiesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
+  
+  const [properties, setProperties] = useState<Property[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredProperties = propertiesData.filter((property) => {
+  const fetchProperties = async () => {
+    try {
+      setIsLoading(true)
+      // Fetch all properties so we can filter clientside (or we could fetch based on tab)
+      // We will parse max 100 for global dashboard review, or use pagination fully in a deeper build.
+      const res = await propertyService.getAll({ page: 1, limit: 100 })
+      setProperties(res.properties)
+    } catch (error) {
+      console.error("Failed to load properties:", error)
+      toast.error("Error loading property listings")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProperties()
+  }, [])
+
+  const handleStatusChange = async (id: string, status: string) => {
+    try {
+      if (status === 'available') {
+          await adminService.approveProperty(id);
+          toast.success("Property approved successfully");
+      } else {
+          await propertyService.updateProperty(id, { status });
+          toast.success(`Property successfully marked as ${status}`);
+      }
+      fetchProperties()
+    } catch (error) {
+       console.error(error)
+       toast.error("Failed to update property status")
+    }
+  }
+
+  const filteredProperties = properties.filter((property) => {
     const matchesSearch =
       property.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      property.agent.toLowerCase().includes(searchQuery.toLowerCase())
+      (property.city || property.address || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (typeof property.agent === 'object' ? property.agent?.name : '').toLowerCase().includes(searchQuery.toLowerCase())
 
     if (activeTab === "all") return matchesSearch
     if (activeTab === "pending") return matchesSearch && property.status === "pending"
-    if (activeTab === "active") return matchesSearch && property.status === "active"
-    if (activeTab === "rejected") return matchesSearch && property.status === "rejected"
+    if (activeTab === "live") return matchesSearch && property.status === "available"
+    if (activeTab === "sold") return matchesSearch && property.status === "sold"
 
     return matchesSearch
   })
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "active":
+      case "available":
         return (
           <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">
-            Active
+            Live
           </Badge>
         )
       case "pending":
@@ -108,12 +106,8 @@ export default function AdminPropertiesPage() {
             Pending Review
           </Badge>
         )
-      case "rejected":
-        return (
-          <Badge variant="destructive" className="shadow-none">
-            Rejected
-          </Badge>
-        )
+      case "sold":
+        return <Badge variant="secondary" className="shadow-none">Sold</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -142,12 +136,12 @@ export default function AdminPropertiesPage() {
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="pending" className="relative">
                   Pending
-                  {propertiesData.filter((p) => p.status === "pending").length > 0 && (
+                  {properties.filter((p) => p.status === "pending").length > 0 && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background" />
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="rejected">Rejected</TabsTrigger>
+                <TabsTrigger value="live">Live</TabsTrigger>
+                <TabsTrigger value="sold">Sold</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -171,7 +165,11 @@ export default function AdminPropertiesPage() {
 
       {/* Properties List */}
       <div className="space-y-4">
-        {filteredProperties.length > 0 ? (
+        {isLoading ? (
+             <div className="flex justify-center py-12">
+                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
+             </div>
+        ) : filteredProperties.length > 0 ? (
           filteredProperties.map((property) => (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -182,14 +180,14 @@ export default function AdminPropertiesPage() {
                 <div className="flex flex-col sm:flex-row">
                   <div className="relative w-full sm:w-48 h-48 sm:h-auto bg-muted">
                     <Image
-                      src={property.image}
+                      src={property.images?.[0]?.url || "/placeholder.svg"}
                       alt={property.title}
                       fill
                       className="object-cover"
                     />
                     <div className="absolute top-2 left-2">
-                      <Badge className="bg-black/50 hover:bg-black/70 text-white border-0 backdrop-blur-sm">
-                        {property.type}
+                      <Badge className="bg-black/50 hover:bg-black/70 text-white border-0 backdrop-blur-sm shadow-sm capitalize">
+                        {property.propertyKind || property.type || property.category}
                       </Badge>
                     </div>
                   </div>
@@ -202,7 +200,7 @@ export default function AdminPropertiesPage() {
                           </h3>
                           <div className="flex items-center gap-1 text-muted-foreground text-sm mt-1">
                             <MapPin className="w-4 h-4" />
-                            <span>{property.location}</span>
+                            <span>{property.location?.type === 'Point' ? 'Geolocation set' : (property.city || property.address)}</span>
                           </div>
                         </div>
                         {getStatusBadge(property.status)}
@@ -211,29 +209,28 @@ export default function AdminPropertiesPage() {
                       <div className="flex items-center gap-6 mt-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                             <Building2 className="w-4 h-4" />
-                            <span>Listed by <span className="text-foreground font-medium">{property.agent}</span></span>
+                            <span>Listed by <span className="text-foreground font-medium">{typeof property.agent === 'object' ? property.agent?.name : 'Unknown User'}</span></span>
                         </div>
                         <div>
-                            <span>Posted {property.date}</span>
+                            <span>Posted {dayjs(property.createdAt).fromNow()}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between mt-6 pt-4 border-t">
                       <span className="font-heading font-bold text-xl text-foreground">
-                        {property.price}
+                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(property.price)}
                       </span>
                       <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm">
+                          <Link href={`/properties/${property.id}`} className="inline-flex items-center">
                             <Eye className="w-4 h-4 mr-2" />
                             View
+                          </Link>
                         </Button>
                         {property.status === "pending" ? (
                             <>
-                                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive border-destructive/20 hover:bg-destructive/10">
-                                    <XCircle className="w-4 h-4 mr-2" /> Reject
-                                </Button>
-                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                                <Button onClick={() => handleStatusChange(property.id, 'available')} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                                     <CheckCircle className="w-4 h-4 mr-2" /> Approve
                                 </Button>
                             </>
@@ -245,9 +242,12 @@ export default function AdminPropertiesPage() {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem>Edit Listing</DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-destructive">Delete Listing</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleStatusChange(property.id, 'pending')}>Revert to Pending</DropdownMenuItem>
+                                    {property.status !== "sold" && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(property.id, 'sold')} className="text-destructive">
+                                        Mark as Sold
+                                      </DropdownMenuItem>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}

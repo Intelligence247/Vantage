@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, UpdateQuery } from 'mongoose';
 import { Inquiry, InquiryDocument } from '../schema/inquiry.schema';
 
 @Injectable()
@@ -46,10 +46,10 @@ export class InquiriesRepository {
 
   async update(
     id: string,
-    data: Partial<Inquiry>,
+    data: UpdateQuery<Inquiry>,
   ): Promise<InquiryDocument | null> {
     return this.inquiryModel
-      .findByIdAndUpdate(id, data, { new: true })
+      .findByIdAndUpdate(id, data, { returnDocument: 'after' })
       .exec();
   }
 }

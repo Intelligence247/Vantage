@@ -9,6 +9,34 @@ export enum InquiryStatus {
   CLOSED = 'closed',
 }
 
+export enum InquiryParticipantRole {
+  BUYER = 'buyer',
+  AGENT = 'agent',
+  ADMIN = 'admin',
+}
+
+@Schema({ _id: false, timestamps: false })
+export class InquiryMessage {
+  @Prop({
+    type: MongooseSchema.Types.ObjectId,
+    ref: 'User',
+  })
+  sender?: MongooseSchema.Types.ObjectId;
+
+  @Prop({
+    type: String,
+    enum: InquiryParticipantRole,
+    required: true,
+  })
+  senderRole!: InquiryParticipantRole;
+
+  @Prop({ required: true, trim: true })
+  body!: string;
+
+  @Prop({ type: Date, default: () => new Date() })
+  createdAt!: Date;
+}
+
 @Schema({ timestamps: true })
 export class Inquiry {
   @Prop({
@@ -42,6 +70,9 @@ export class Inquiry {
 
   @Prop({ required: true, trim: true })
   message!: string;
+
+  @Prop({ type: [InquiryMessage], default: [] })
+  messages!: InquiryMessage[];
 
   @Prop({
     type: String,

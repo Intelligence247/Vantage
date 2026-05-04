@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { MailService } from '../mail/mail.service';
 import * as bcrypt from 'bcrypt';
 import { Role } from '../../common/enums/role.enum';
 
@@ -12,6 +13,7 @@ const mockUsersService = {
   findByEmail: jest.fn(),
   findById: jest.fn(),
   updateRefreshToken: jest.fn(),
+  setEmailVerificationToken: jest.fn(),
 };
 
 const mockJwtService = {
@@ -37,6 +39,10 @@ const mockLogger = {
   warn: jest.fn(),
 };
 
+const mockMailService = {
+  sendEmailVerification: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -47,6 +53,7 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: mockUsersService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: MailService, useValue: mockMailService },
         { provide: 'winston', useValue: mockLogger },
       ],
     }).compile();

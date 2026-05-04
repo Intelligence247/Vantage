@@ -2,46 +2,41 @@ import { apiClient } from '../lib/api-client';
 import { BackendResponse } from './auth.service';
 
 export interface Property {
-    _id: string;
+    id: string;
     title: string;
     description: string;
-    type: string;
-    category: string;
-    propertyKind: string;
-    status: string;
     price: number;
-    currency: string;
-    bedrooms: number;
-    bathrooms: number;
-    toilets: number;
-    size: number;
-    sizeUnit: string;
-    furnishing: string;
-    location: {
-        address: string;
-        city: string;
-        state: string;
-        country: string;
-        coordinates: {
-            lat: number;
-            lng: number;
-        };
+    location?: {
+        type: string;
+        coordinates: number[];
     };
+    address?: string;
+    city?: string;
+    area?: string;
+    state?: string;
+    type: string;
+    category?: string;
+    propertyKind?: string;
     features: string[];
     images: {
         url: string;
         publicId: string;
-        isPrimary: boolean;
     }[];
-    agent: {
-        _id: string;
-        name: string;
-        email: string;
-        phone: string;
-        isVerified: boolean;
-    };
+    is360: boolean;
+    status: string;
+    agent: any;
     views: number;
-    likes: number;
+    leads: number;
+    beds?: number;
+    baths?: number;
+    sqft?: number;
+    parking?: number;
+    yearBuilt?: number;
+    isVerified: boolean;
+    isFeatured: boolean;
+    paymentPeriod?: string;
+    nearbyPlaces: any[];
+    favoritedBy: string[];
     createdAt: string;
     updatedAt: string;
 }
@@ -62,6 +57,7 @@ export interface PropertyFilters {
     category?: string;
     propertyKind?: string;
     status?: string;
+    agent?: string;
     state?: string;
     city?: string;
     minPrice?: number;
@@ -110,6 +106,92 @@ export const propertyService = {
      */
     async toggleFavorite(propertyId: string): Promise<{ isFavorited: boolean }> {
         const response: BackendResponse<{ isFavorited: boolean }> = await apiClient.post(`/properties/${propertyId}/favorite`);
+        return response.data;
+    },
+
+    /**
+     * Create a new property
+     */
+    async createProperty(propertyData: any): Promise<Property> {
+        const response: BackendResponse<Property> = await apiClient.post('/properties', propertyData);
+        return response.data;
+    },
+
+    /**
+     * Update a property (Admin or Owner)
+     */
+    async updateProperty(propertyId: string, propertyData: Partial<Property>): Promise<Property> {
+        const response: BackendResponse<Property> = await apiClient.put(`/properties/${propertyId}`, propertyData);
+        return response.data;
+    },
+
+    /**
+     * Delete a property (Admin or Owner)
+     */
+    async deleteProperty(propertyId: string): Promise<void> {
+        await apiClient.delete(`/properties/${propertyId}`);
+    },
+
+    /**
+     * Upload multiple property images
+     */
+    async uploadImages(files: File[]): Promise<Array<{ url: string; publicId: string }>> {
+        const formData = new FormData();
+        files.forEach((file) => {
+            formData.append('images', file);
+        });
+
+        const response: BackendResponse<Array<{ url: string; publicId: string }>> = await apiClient.post(
+            '/upload/images',
+            formData,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            }
+        );
+        return response.data;
+    },
+
+    /**
+     * Upload a single image
+     */
+    async uploadSingleImage(file: File): Promise<{ url: string; publicId: string }> {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response: BackendResponse<{ url: string; publicId: string }> = await apiClient.post(
+            '/upload/image',
+            formData,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            }
+        );
+        return response.data;
+    },
+
+    /**
+     * Delete an image from Cloudinary
+     */
+    async deleteImage(publicId: string): Promise<void> {
+        await apiClient.delete(`/upload/image/${publicId}`);
+    },
+
+    /**
+     * Get agent's own properties
+     */
+    async getAgentProperties(page: number = 1, limit: number = 20): Promise<PaginatedProperties> {
+        const response: BackendResponse<PaginatedProperties> = await apiClient.get('/properties/agent/me', { params: { page, limit } });
+        return response.data;
+    },
+
+    /**
+     * Get agent property stats
+     */
+    async getAgentStats(): Promise<any> {
+        const response: BackendResponse<any> = await apiClient.get('/properties/agent/stats');
         return response.data;
     }
 };

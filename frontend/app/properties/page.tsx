@@ -253,12 +253,12 @@ export default function PropertiesPage() {
                 >
                   {propertiesData?.properties.map((property, index) => (
                     <motion.div
-                      key={property._id}
+                      key={property.id || (property as any)._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.4, delay: index * 0.05 }}
                     >
-                      <Link href={`/properties/${property._id}`}>
+                      <Link href={`/properties/${property.id || (property as any)._id}`}>
                         <div
                           className={`group bg-white rounded-xl overflow-hidden shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] transition-all duration-300 ${
                             viewMode === "list" ? "flex flex-col md:flex-row" : ""
@@ -288,14 +288,14 @@ export default function PropertiesPage() {
                             <button
                               onClick={(e) => {
                                 e.preventDefault()
-                                toggleFavorite(property._id)
+                                toggleFavorite(property.id || (property as any)._id)
                               }}
                               className="absolute top-4 right-4 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
                               aria-label="Add to favorites"
                             >
                               <Heart
                                 className={`w-5 h-5 transition-colors ${
-                                  favorites.includes(property._id) ? "fill-red-500 text-red-500" : "text-primary"
+                                  favorites.includes(property.id || (property as any)._id) ? "fill-red-500 text-red-500" : "text-primary"
                                 }`}
                               />
                             </button>
@@ -316,7 +316,7 @@ export default function PropertiesPage() {
                                 </h3>
                                 <div className="flex items-center gap-1 mt-1 text-muted-foreground">
                                   <MapPin className="w-4 h-4" />
-                                  <span className="text-sm">{property.location.address}, {property.location.city}</span>
+                                  <span className="text-sm">{[property.address, property.city].filter(Boolean).join(', ')}</span>
                                 </div>
                               </div>
                             </div>
@@ -325,16 +325,16 @@ export default function PropertiesPage() {
                             <div className="flex items-center gap-4 mt-4 text-muted-foreground">
                               <div className="flex items-center gap-1">
                                 <Bed className="w-4 h-4" />
-                                <span className="text-sm">{property.bedrooms} Beds</span>
+                                <span className="text-sm">{property.beds || 0} Beds</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <Bath className="w-4 h-4" />
-                                <span className="text-sm">{property.bathrooms} Baths</span>
+                                <span className="text-sm">{property.baths || 0} Baths</span>
                               </div>
-                              {property.size && (
+                              {property.sqft && (
                                 <div className="flex items-center gap-1">
                                   <Square className="w-4 h-4" />
-                                  <span className="text-sm">{property.size} {property.sizeUnit}</span>
+                                  <span className="text-sm">{property.sqft} sqft</span>
                                 </div>
                               )}
                             </div>
@@ -342,7 +342,7 @@ export default function PropertiesPage() {
                             {/* Price */}
                             <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
                               <p className="font-heading text-xl font-bold text-accent">
-                                {formatPrice(property.price, property.currency)}
+                                {formatPrice(property.price, '₦')}
                               </p>
                               <span className="text-sm text-muted-foreground">View Details →</span>
                             </div>

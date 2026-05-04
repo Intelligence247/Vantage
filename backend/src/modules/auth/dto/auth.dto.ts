@@ -58,8 +58,23 @@ export const refreshTokenSchema = z.object({
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 
 export class RefreshTokenDto {
-  @ApiProperty({ description: 'Refresh token' })
+  @ApiProperty()
   refreshToken!: string;
+}
+
+export const verifyEmailSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  token: z.string().length(6, 'Token must be exactly 6 characters'),
+});
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+export class VerifyEmailDto {
+  @ApiProperty({ example: 'john@example.com' })
+  email!: string;
+
+  @ApiProperty({ example: '123456' })
+  token!: string;
 }
 
 export interface AuthTokens {

@@ -5,9 +5,11 @@ import {
   RegisterDto,
   LoginDto,
   RefreshTokenDto,
+  VerifyEmailDto,
   registerSchema,
   loginSchema,
   refreshTokenSchema,
+  verifyEmailSchema,
 } from './dto/auth.dto';
 import { Public, CurrentUser, JwtPayload } from '../../common/decorators';
 import { zodValidate } from '../../common/utils';
@@ -23,6 +25,15 @@ export class AuthController {
   async register(@Body() body: RegisterDto) {
     const validated = zodValidate(registerSchema, body);
     return this.authService.register(validated);
+  }
+
+  @Public()
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify email with OTP token' })
+  async verifyEmail(@Body() body: VerifyEmailDto) {
+    const validated = zodValidate(verifyEmailSchema, body);
+    return this.authService.verifyEmail(validated);
   }
 
   @Public()

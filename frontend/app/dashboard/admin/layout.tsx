@@ -19,8 +19,10 @@ import {
   Search,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/context/AuthContext"
+import { formatRoleLabel } from "@/lib/dashboard-routes"
 
 const navLinks = [
   { name: "Overview", href: "/dashboard/admin", icon: LayoutGrid },
@@ -37,6 +39,7 @@ export default function AdminDashboardLayout({
 }) {
   const pathname = usePathname()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const { user, logout } = useAuth()
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -107,13 +110,18 @@ export default function AdminDashboardLayout({
           })}
         </nav>
 
-        <div className="p-4 border-t">
+        <div className="p-4 border-t space-y-3">
+          <div className="px-2 py-1 rounded-md bg-muted/50">
+            <p className="text-xs font-medium text-foreground truncate">{user?.name ?? "Administrator"}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{formatRoleLabel(user?.role)}</p>
+          </div>
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 text-red-500 hover:text-red-600 hover:bg-red-50"
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-muted"
+            onClick={logout}
           >
-            <LogOut className="w-5 h-5" />
-            Sign Out
+            <LogOut className="w-5 h-5 shrink-0" />
+            Log out
           </Button>
         </div>
       </motion.aside>
@@ -151,12 +159,22 @@ export default function AdminDashboardLayout({
 
             <div className="flex items-center gap-3">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-foreground">Admin User</p>
-                <p className="text-xs text-muted-foreground">Super Admin</p>
+                <p className="text-sm font-medium text-foreground truncate max-w-[140px]">
+                  {user?.name ?? "Admin"}
+                </p>
+                <p className="text-xs text-muted-foreground">{formatRoleLabel(user?.role)}</p>
               </div>
               <Avatar className="h-9 w-9 border-2 border-primary/10">
-                <AvatarImage src="/admin-avatar.jpg" />
-                <AvatarFallback className="bg-primary text-primary-foreground">AD</AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {user?.name
+                    ? user.name
+                        .split(/\s+/)
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()
+                    : "AD"}
+                </AvatarFallback>
               </Avatar>
             </div>
           </div>

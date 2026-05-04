@@ -2,9 +2,12 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
+import { toast } from "sonner"
+import { propertyService } from "@/services/property.service"
 import {
   ArrowLeft,
   Upload,
@@ -29,11 +32,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 
 const propertyTypes = [
-  { value: "house", label: "House", icon: Home },
-  { value: "apartment", label: "Apartment", icon: Building2 },
-  { value: "duplex", label: "Duplex", icon: Building2 },
-  { value: "villa", label: "Villa", icon: Home },
-  { value: "land", label: "Land", icon: MapPin },
+  { value: "sale", label: "Sale", icon: Home },
+  { value: "rent", label: "Rent", icon: Building2 },
+  { value: "shortlet", label: "Shortlet", icon: Home },
+]
+
+const propertyKinds = [
+  { value: "house", label: "House" },
+  { value: "apartment", label: "Apartment" },
+  { value: "duplex", label: "Duplex" },
+  { value: "villa", label: "Villa" },
+  { value: "land", label: "Land" },
 ]
 
 const amenities = [
@@ -52,11 +61,46 @@ const amenities = [
 ]
 
 export default function NewPropertyPage() {
-  const [selectedType, setSelectedType] = useState("")
-  const [listingType, setListingType] = useState("")
+  const router = useRouter()
+  // Basic Info
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [type, setType] = useState("sale")
+  const [propertyKind, setPropertyKind] = useState("house")
+  // Location
+  const [address, setAddress] = useState("")
+  const [city, setCity] = useState("")
+  const [area, setArea] = useState("")
+  const [state, setState] = useState("lagos")
+  // Pricing
+  const [price, setPrice] = useState("")
+  const [paymentPeriod, setPaymentPeriod] = useState("yearly")
+  // Details
+  const [beds, setBeds] = useState("")
+  const [baths, setBaths] = useState("")
+  const [sqft, setSqft] = useState("")
+  const [parking, setParking] = useState("")
+
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
-  const [images, setImages] = useState<string[]>([])
+  
+  // Images
+  const [images, setImages] = useState<{ file: File; preview: string }[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files)
+      
+      const newImages = selectedFiles.map((file) => ({
+        file,
+        preview: URL.createObjectURL(file),
+      }))
+      
+      setImages((prev) => [...prev, ...newImages].slice(0, 10)) // Max 10 images
+    }
+  }
 
   const toggleAmenity = (amenity: string) => {
     setSelectedAmenities((prev) => (prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]))
@@ -64,10 +108,54 @@ export default function NewPropertyPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!title || !description || !price || !type || !propertyKind || !state) {
+        toast.error("Please fill in all required fields (marked * on form if added, else check your inputs).")
+        return
+    }
+
     setIsSubmitting(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsSubmitting(false)
+    try {
+      let uploadedImagesUrls: Array<{ url: string; publicId: string }> = []
+      
+      if (images.length > 0) {
+        toast.loading("Uploading images...", { id: "upload" })
+        const filesToUpload = images.map((img) => img.file)
+        uploadedImagesUrls = await propertyService.uploadImages(filesToUpload)
+        toast.success("Images uploaded successfully!", { id: "upload" })
+      }
+
+      const payload = {
+          title,
+          description,
+          price: Number(price),
+          type,
+          propertyKind,
+          address,
+          city,
+          area,
+          state,
+          beds: beds ? Number(beds) : undefined,
+          baths: baths ? Number(baths) : undefined,
+          sqft: sqft ? Number(sqft) : undefined,
+          parking: parking ? Number(parking) : undefined,
+          paymentPeriod: paymentPeriod || undefined,
+          features: selectedAmenities,
+          images: uploadedImagesUrls,
+      }
+
+      toast.loading("Creating property...", { id: "create" })
+      await propertyService.createProperty(payload)
+      toast.success("Property created successfully!", { id: "create" })
+      
+      router.push("/dashboard/vendor/properties")
+    } catch (error: any) {
+      console.error("Property creation error:", error)
+      toast.error(error.response?.data?.message || "Failed to create property")
+      toast.dismiss("upload")
+      toast.dismiss("create")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -99,33 +187,36 @@ export default function NewPropertyPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="title">Property Title</Label>
-                <Input id="title" placeholder="e.g., Luxury 4-Bedroom Duplex with Pool" className="mt-1.5" />
+                <Label htmlFor="title">Property Title <span className="text-red-500">*</span></Label>
+                <Input id="title" placeholder="e.g., Luxury 4-Bedroom Duplex with Pool" className="mt-1.5" value={title} onChange={e => setTitle(e.target.value)} required />
               </div>
 
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">Description <span className="text-red-500">*</span></Label>
                 <Textarea
                   id="description"
                   placeholder="Describe your property in detail..."
                   rows={4}
                   className="mt-1.5"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  required
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label>Property Type</Label>
-                  <Select value={selectedType} onValueChange={setSelectedType}>
+                  <Label>Listing Type <span className="text-red-500">*</span></Label>
+                  <Select defaultValue={type} onValueChange={setType}>
                     <SelectTrigger className="mt-1.5">
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder="Select listing type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {propertyTypes.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
+                      {propertyTypes.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
                           <div className="flex items-center gap-2">
-                            <type.icon className="w-4 h-4" />
-                            {type.label}
+                            <t.icon className="w-4 h-4" />
+                            {t.label}
                           </div>
                         </SelectItem>
                       ))}
@@ -133,15 +224,17 @@ export default function NewPropertyPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Listing Type</Label>
-                  <Select value={listingType} onValueChange={setListingType}>
+                  <Label>Property Kind <span className="text-red-500">*</span></Label>
+                  <Select defaultValue={propertyKind} onValueChange={setPropertyKind}>
                     <SelectTrigger className="mt-1.5">
-                      <SelectValue placeholder="Select listing type" />
+                      <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sale">For Sale</SelectItem>
-                      <SelectItem value="rent">For Rent</SelectItem>
-                      <SelectItem value="shortlet">Short Let</SelectItem>
+                      {propertyKinds.map((pk) => (
+                          <SelectItem key={pk.value} value={pk.value}>
+                              {pk.label}
+                          </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -160,20 +253,20 @@ export default function NewPropertyPage() {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="address">Street Address</Label>
-                <Input id="address" placeholder="e.g., 15 Admiralty Way" className="mt-1.5" />
+                <Input id="address" placeholder="e.g., 15 Admiralty Way" className="mt-1.5" value={address} onChange={e => setAddress(e.target.value)} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" placeholder="e.g., Lagos" className="mt-1.5" />
+                  <Input id="city" placeholder="e.g., Lagos" className="mt-1.5" value={city} onChange={e => setCity(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="area">Area/District</Label>
-                  <Input id="area" placeholder="e.g., Lekki Phase 1" className="mt-1.5" />
+                  <Input id="area" placeholder="e.g., Lekki Phase 1" className="mt-1.5" value={area} onChange={e => setArea(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="state">State</Label>
-                  <Select>
+                  <Label htmlFor="state">State <span className="text-red-500">*</span></Label>
+                  <Select defaultValue={state} onValueChange={setState}>
                     <SelectTrigger className="mt-1.5">
                       <SelectValue placeholder="Select state" />
                     </SelectTrigger>
@@ -201,19 +294,20 @@ export default function NewPropertyPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="price">Price (₦)</Label>
-                  <Input id="price" type="number" placeholder="e.g., 85000000" className="mt-1.5" />
+                  <Label htmlFor="price">Price (₦) <span className="text-red-500">*</span></Label>
+                  <Input id="price" type="number" placeholder="e.g., 85000000" className="mt-1.5" value={price} onChange={e => setPrice(e.target.value)} required min="1" />
                 </div>
-                {listingType === "rent" && (
+                {(type === "rent" || type === "shortlet") && (
                   <div>
                     <Label>Payment Period</Label>
-                    <Select>
+                    <Select defaultValue={paymentPeriod} onValueChange={setPaymentPeriod}>
                       <SelectTrigger className="mt-1.5">
                         <SelectValue placeholder="Select period" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="yearly">Per Year</SelectItem>
                         <SelectItem value="monthly">Per Month</SelectItem>
+                        <SelectItem value="daily">Per Day</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -234,28 +328,28 @@ export default function NewPropertyPage() {
                     <Bed className="w-4 h-4 text-muted-foreground" />
                     Bedrooms
                   </Label>
-                  <Input id="beds" type="number" min="0" placeholder="0" className="mt-1.5" />
+                  <Input id="beds" type="number" min="0" placeholder="0" className="mt-1.5" value={beds} onChange={e => setBeds(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="baths" className="flex items-center gap-2">
                     <Bath className="w-4 h-4 text-muted-foreground" />
                     Bathrooms
                   </Label>
-                  <Input id="baths" type="number" min="0" placeholder="0" className="mt-1.5" />
+                  <Input id="baths" type="number" min="0" placeholder="0" className="mt-1.5" value={baths} onChange={e => setBaths(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="sqft" className="flex items-center gap-2">
                     <Maximize className="w-4 h-4 text-muted-foreground" />
                     Size (m²)
                   </Label>
-                  <Input id="sqft" type="number" min="0" placeholder="0" className="mt-1.5" />
+                  <Input id="sqft" type="number" min="0" placeholder="0" className="mt-1.5" value={sqft} onChange={e => setSqft(e.target.value)} />
                 </div>
                 <div>
                   <Label htmlFor="parking" className="flex items-center gap-2">
                     <Car className="w-4 h-4 text-muted-foreground" />
                     Parking
                   </Label>
-                  <Input id="parking" type="number" min="0" placeholder="0" className="mt-1.5" />
+                  <Input id="parking" type="number" min="0" placeholder="0" className="mt-1.5" value={parking} onChange={e => setParking(e.target.value)} />
                 </div>
               </div>
             </CardContent>
@@ -271,8 +365,7 @@ export default function NewPropertyPage() {
                 {amenities.map((amenity) => (
                   <div
                     key={amenity}
-                    className="flex items-center space-x-2 cursor-pointer"
-                    onClick={() => toggleAmenity(amenity)}
+                    className="flex items-center space-x-2"
                   >
                     <Checkbox
                       id={amenity}
@@ -297,11 +390,22 @@ export default function NewPropertyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-accent/50 transition-colors cursor-pointer">
+              <div 
+                className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-accent/50 transition-colors cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  className="hidden" 
+                  multiple 
+                  accept="image/png, image/jpeg, image/webp" 
+                  onChange={handleImageSelect}
+                />
                 <Upload className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground mb-1">Drag and drop your images here, or click to browse</p>
                 <p className="text-sm text-muted-foreground">PNG, JPG up to 10MB (max 10 images)</p>
-                <Button variant="outline" className="mt-4 gap-2 bg-transparent">
+                <Button variant="outline" className="mt-4 gap-2 bg-transparent" type="button">
                   <Plus className="w-4 h-4" />
                   Add Images
                 </Button>
@@ -310,11 +414,16 @@ export default function NewPropertyPage() {
                 <div className="grid grid-cols-4 gap-4 mt-4">
                   {images.map((image, index) => (
                     <div key={index} className="relative aspect-square rounded-lg overflow-hidden bg-muted">
+                      <img src={image.preview} alt="Preview" className="object-cover w-full h-full" />
                       <Button
                         variant="destructive"
                         size="icon"
+                        type="button"
                         className="absolute top-2 right-2 h-6 w-6"
-                        onClick={() => setImages(images.filter((_, i) => i !== index))}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setImages(images.filter((_, i) => i !== index))
+                        }}
                       >
                         <X className="w-3 h-3" />
                       </Button>

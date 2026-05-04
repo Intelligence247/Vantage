@@ -18,4 +18,16 @@ export default () => ({
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
+  mail: {
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    user: process.env.SMTP_EMAIL,
+    pass: process.env.SMTP_PASSWORD,
+    fromEmail: process.env.FROM_EMAIL,
+    fromName: process.env.FROM_NAME,
+  },
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY,
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY,
+  },
 });

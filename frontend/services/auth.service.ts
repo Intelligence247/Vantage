@@ -27,6 +27,11 @@ export interface BackendResponse<T> {
     message: string;
 }
 
+export interface VerifyEmailPayload {
+    email: string;
+    token: string;
+}
+
 export const authService = {
     /**
      * Register a new user
@@ -50,6 +55,11 @@ export const authService = {
      */
     async logout(): Promise<void> {
         await apiClient.post('/auth/logout');
+    },
+
+    async verifyEmail(data: VerifyEmailPayload): Promise<{ message: string }> {
+        const response: BackendResponse<{ message: string }> = await apiClient.post('/auth/verify-email', data);
+        return response.data;
     },
 
     /**

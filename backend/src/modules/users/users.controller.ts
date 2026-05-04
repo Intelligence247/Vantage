@@ -15,7 +15,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CurrentUser, JwtPayload } from '../../common/decorators';
+import { CurrentUser, JwtPayload, Public } from '../../common/decorators';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 import { Role } from '../../common/enums/role.enum';
@@ -23,9 +23,11 @@ import {
   UpdateUserDto,
   ChangePasswordDto,
   UpdateNotificationPrefsDto,
+  UploadKycDto,
   updateUserSchema,
   changePasswordSchema,
   updateNotificationPrefsSchema,
+  uploadKycSchema,
 } from './dto/user.dto';
 import { zodValidate } from '../../common/utils';
 
@@ -75,10 +77,20 @@ export class UsersController {
     );
   }
 
+  @Put('kyc-document')
+  @Roles(Role.AGENT)
+  @ApiOperation({ summary: 'Upload KYC Document for verification' })
+  async uploadKycDocument(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: UploadKycDto,
+  ) {
+    const validated = zodValidate(uploadKycSchema, body);
+    return this.usersService.uploadKycDocument(user.sub, validated);
+  }
+
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Get all users (Admin only)' })
+  @Public()
+  @ApiOperation({ summary: 'Get all users (Public, filters by role)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'role', required: false, enum: Role })
@@ -95,9 +107,8 @@ export class UsersController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Get user by ID (Admin only)' })
+  @Public()
+  @ApiOperation({ summary: 'Get user by ID (Public)' })
   @ApiParam({ name: 'id', description: 'User ID' })
   async findOne(@Param('id') id: string) {
     return this.usersService.findById(id);

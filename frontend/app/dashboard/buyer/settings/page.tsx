@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { User, Bell, Shield, Camera, Trash2, Save, Mail, Phone } from "lucide-react"
+import { User, Bell, Shield, Camera, Trash2, Save, Mail, Phone, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,16 +12,36 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/context/AuthContext"
 import { userService } from "@/services/user.service"
+import { propertyService } from "@/services/property.service"
 import { toast } from "sonner"
+import { useRef } from "react"
 
 export default function BuyerSettingsPage() {
   const { user, checkAuth } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
+    avatar: "",
+  })
+
+  // Password State
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+
+  // Notifications State
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: true,
+    sms: false,
   })
 
   useEffect(() => {
@@ -32,6 +52,7 @@ export default function BuyerSettingsPage() {
         lastName: parts.slice(1).join(" ") || "",
         email: user.email || "",
         phone: (user as any).phone || "",
+        avatar: (user as any).avatar || "",
       })
     }
   }, [user])
@@ -43,14 +64,63 @@ export default function BuyerSettingsPage() {
       await userService.updateProfile({
         name: fullName,
         phone: formData.phone,
+        avatar: formData.avatar,
+      })
+      await userService.updateNotifications({
+        email: notifications.email,
+        push: notifications.push,
+        sms: notifications.sms,
       })
       await checkAuth()
-      toast.success("Profile updated successfully")
+      toast.success("Settings updated successfully")
     } catch (error) {
       console.error("Failed to update profile:", error)
       toast.error("Failed to update profile")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handlePasswordChange = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error("New passwords do not match")
+      return
+    }
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      toast.error("Please fill in all password fields")
+      return
+    }
+
+    try {
+      setIsUpdatingPassword(true)
+      await userService.updatePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      })
+      toast.success("Password updated successfully")
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+    } catch (error: any) {
+      console.error("Failed to update password:", error)
+      toast.error(error.message || "Failed to update password")
+    } finally {
+      setIsUpdatingPassword(false)
+    }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      setIsUploadingAvatar(true)
+      const data = await propertyService.uploadSingleImage(file)
+      setFormData(prev => ({ ...prev, avatar: data.url }))
+      toast.success("Image uploaded. Remember to save your settings!")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to upload avatar")
+    } finally {
+      setIsUploadingAvatar(false)
     }
   }
 
@@ -90,21 +160,33 @@ export default function BuyerSettingsPage() {
               <CardContent>
                 <div className="flex items-center gap-6">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
-                        <span className="font-heading font-bold text-3xl text-muted-foreground uppercase">{user?.name?.[0] || 'B'}</span>
+                    <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center relative border-2 border-border">
+                        {formData.avatar ? (
+                            <Image src={formData.avatar} alt="Avatar" fill className="object-cover" />
+                        ) : (
+                            <span className="font-heading font-bold text-3xl text-muted-foreground uppercase">{user?.name?.[0] || 'B'}</span>
+                        )}
+                        {isUploadingAvatar && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            </div>
+                        )}
                     </div>
                     <Button
                       size="icon"
-                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-accent hover:bg-accent-hover text-primary"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-accent hover:bg-accent-hover text-primary z-10"
                     >
                       <Camera className="w-4 h-4" />
                     </Button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
                   </div>
                   <div>
                     <p className="font-medium text-foreground capitalize">{user?.name || "Buyer Name"}</p>
                     <p className="text-sm text-muted-foreground capitalize">{user?.role || "User"}</p>
-                    <Button variant="outline" size="sm" className="mt-2 bg-transparent">
-                      Change Photo
+                    <Button variant="outline" size="sm" className="mt-2 bg-transparent" onClick={() => fileInputRef.current?.click()} disabled={isUploadingAvatar}>
+                      {isUploadingAvatar ? "Uploading..." : "Change Photo"}
                     </Button>
                   </div>
                 </div>
@@ -192,28 +274,20 @@ export default function BuyerSettingsPage() {
                 <CardDescription>Manage your email notification preferences</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  {
-                    label: "New Listings Alerts",
-                    description: "Get notified when new properties match your saved search",
-                    default: true,
-                  },
-                  { label: "Price Drops", description: "Receive alerts when saved properties change price", default: true },
-                  { label: "Messages", description: "Receive email notifications for new messages from agents", default: true },
-                  {
-                    label: "Newsletter",
-                    description: "Weekly updates on the Nigerian real estate market",
-                    default: false,
-                  },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div className="flex items-center justify-between py-3 border-b last:border-0">
                     <div>
-                      <p className="font-medium text-foreground">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="font-medium text-foreground">New Listings Alerts</p>
+                      <p className="text-sm text-muted-foreground">Get notified when new properties match your saved search</p>
                     </div>
-                    <Switch defaultChecked={item.default} />
+                    <Switch checked={notifications.email} onCheckedChange={(val) => setNotifications(prev => ({...prev, email: val}))} />
                   </div>
-                ))}
+                  <div className="flex items-center justify-between py-3 border-b last:border-0">
+                    <div>
+                      <p className="font-medium text-foreground">Price Drops & Messages</p>
+                      <p className="text-sm text-muted-foreground">Receive email notifications for messages and price drops</p>
+                    </div>
+                    <Switch checked={notifications.email} onCheckedChange={(val) => setNotifications(prev => ({...prev, email: val}))} />
+                  </div>
               </CardContent>
             </Card>
 
@@ -223,23 +297,20 @@ export default function BuyerSettingsPage() {
                 <CardDescription>Manage your push notification preferences</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {[
-                  {
-                    label: "Inspection Reminders",
-                    description: "Reminders for upcoming property visits",
-                    default: true,
-                  },
-                  { label: "Chat messages", description: "Get notified of new chat messages", default: true },
-                  { label: "Recommended Properties", description: "Alerts for properties you might like", default: false },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div className="flex items-center justify-between py-3 border-b last:border-0">
                     <div>
-                      <p className="font-medium text-foreground">{item.label}</p>
-                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="font-medium text-foreground">Inspection Reminders (SMS/Push)</p>
+                      <p className="text-sm text-muted-foreground">Reminders for upcoming property visits</p>
                     </div>
-                    <Switch defaultChecked={item.default} />
+                    <Switch checked={notifications.sms} onCheckedChange={(val) => setNotifications(prev => ({...prev, sms: val}))} />
                   </div>
-                ))}
+                  <div className="flex items-center justify-between py-3 border-b last:border-0">
+                    <div>
+                      <p className="font-medium text-foreground">Chat messages (Push)</p>
+                      <p className="text-sm text-muted-foreground">Get notified of new chat messages</p>
+                    </div>
+                    <Switch checked={notifications.push} onCheckedChange={(val) => setNotifications(prev => ({...prev, push: val}))} />
+                  </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -254,17 +325,43 @@ export default function BuyerSettingsPage() {
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" className="mt-1.5" />
+                  <Input 
+                    id="currentPassword" 
+                    type="password" 
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                    className="mt-1.5" 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" className="mt-1.5" />
+                  <Input 
+                    id="newPassword" 
+                    type="password" 
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="mt-1.5" 
+                  />
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input id="confirmPassword" type="password" className="mt-1.5" />
+                  <Input 
+                    id="confirmPassword" 
+                    type="password" 
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="mt-1.5" 
+                  />
                 </div>
-                <Button className="bg-primary hover:bg-primary-light text-white">Update Password</Button>
+                <Button 
+                  onClick={handlePasswordChange}
+                  disabled={isUpdatingPassword}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground min-w-[140px]"
+                >
+                  {isUpdatingPassword ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : "Update Password"}
+                </Button>
               </CardContent>
             </Card>
 

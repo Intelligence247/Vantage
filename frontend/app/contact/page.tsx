@@ -20,6 +20,8 @@ import {
 } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
+import { inquiryService } from "@/services/inquiry.service"
+import { toast } from "sonner"
 
 const contactInfo = [
   {
@@ -116,9 +118,15 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSubmitting(false)
-    setSubmitted(true)
+    try {
+        await inquiryService.submitContactForm(formData)
+        setSubmitted(true)
+    } catch (error) {
+        console.error("Failed to send message:", error)
+        toast.error("Failed to send message. Please try again later.")
+    } finally {
+        setIsSubmitting(false)
+    }
   }
 
   return (

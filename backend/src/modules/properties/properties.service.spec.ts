@@ -3,6 +3,8 @@ import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PropertiesService } from './properties.service';
 import { PropertiesRepository } from './repository/properties.repository';
 import { PropertyType } from './schema/property.schema';
+import { MailService } from '../mail/mail.service';
+import { UsersService } from '../users/users.service';
 
 const mockPropertiesRepository = {
   create: jest.fn(),
@@ -27,6 +29,14 @@ const mockLogger = {
   warn: jest.fn(),
 };
 
+const mockMailService = {
+  sendAdminPropertyAlert: jest.fn(),
+};
+
+const mockUsersService = {
+  findById: jest.fn(),
+};
+
 describe('PropertiesService', () => {
   let service: PropertiesService;
 
@@ -35,6 +45,8 @@ describe('PropertiesService', () => {
       providers: [
         PropertiesService,
         { provide: PropertiesRepository, useValue: mockPropertiesRepository },
+        { provide: MailService, useValue: mockMailService },
+        { provide: UsersService, useValue: mockUsersService },
         { provide: 'winston', useValue: mockLogger },
       ],
     }).compile();
@@ -63,6 +75,7 @@ describe('PropertiesService', () => {
         price: 1000000,
         type: PropertyType.SALE,
         features: [],
+        images: [],
         is360: false,
         nearbyPlaces: [],
       });

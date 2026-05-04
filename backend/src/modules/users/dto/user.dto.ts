@@ -66,6 +66,21 @@ export class UpdateUserDto {
   avatar?: string;
 }
 
+export const uploadKycSchema = z.object({
+  verificationDocument: z.string().url('Invalid document URL'),
+  verificationDocPublicId: z.string().optional(),
+});
+
+export type UploadKycInput = z.infer<typeof uploadKycSchema>;
+
+export class UploadKycDto {
+  @ApiProperty({ example: 'https://cloudinary.com/doc.pdf' })
+  verificationDocument!: string;
+
+  @ApiPropertyOptional({ example: 'vantage/docs/doc_1' })
+  verificationDocPublicId?: string;
+}
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z

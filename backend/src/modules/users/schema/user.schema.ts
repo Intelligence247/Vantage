@@ -25,6 +25,15 @@ export class User {
   isVerified!: boolean;
 
   @Prop({ default: false })
+  emailVerified!: boolean;
+
+  @Prop()
+  emailVerificationToken?: string;
+
+  @Prop()
+  emailVerificationTokenExpires?: Date;
+
+  @Prop({ default: false })
   isSuspended!: boolean;
 
   @Prop()
@@ -62,6 +71,8 @@ UserSchema.set('toJSON', {
     delete ret.__v;
     delete ret.password;
     delete ret.hashedRefreshToken;
+    delete ret.emailVerificationToken;
+    delete ret.emailVerificationTokenExpires;
     return ret;
   },
 });

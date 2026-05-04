@@ -12,6 +12,14 @@ export const envSchema = z.object({
     .enum(['development', 'production', 'test'])
     .default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  SMTP_HOST: z.string(),
+  SMTP_PORT: z.string().transform(Number),
+  SMTP_EMAIL: z.string(),
+  SMTP_PASSWORD: z.string(),
+  FROM_EMAIL: z.string(),
+  FROM_NAME: z.string(),
+  PAYSTACK_SECRET_KEY: z.string().min(1, 'PAYSTACK_SECRET_KEY is required'),
+  PAYSTACK_PUBLIC_KEY: z.string().min(1, 'PAYSTACK_PUBLIC_KEY is required'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

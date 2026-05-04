@@ -3,12 +3,14 @@ import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Logger } from 'winston';
 import { UsersService } from '../users/users.service';
 import { PropertiesService } from '../properties/properties.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly usersService: UsersService,
     private readonly propertiesService: PropertiesService,
+    private readonly mailService: MailService,
     @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
   ) {}
 
@@ -42,6 +44,12 @@ export class AdminService {
   async verifyAgent(userId: string) {
     const user = await this.usersService.verifyAgent(userId);
     this.logger.info('Admin verified agent', { userId });
+    
+    // Async fire off the approval email
+    this.mailService.sendVendorApproval(user.email, user.name).catch(e => {
+        this.logger.error('Failed to send vendor approval email', e);
+    });
+
     return user;
   }
 
@@ -64,6 +72,20 @@ export class AdminService {
   async approveProperty(propertyId: string) {
     const property = await this.propertiesService.approveProperty(propertyId);
     this.logger.info('Admin approved property', { propertyId });
+    
+    // Fetch the vendor to get their email and name
+    try {
+      const vendorId = property.agent?.toString() || property.agent;
+      if (vendorId) {
+        const vendor = await this.usersService.findById(vendorId as string);
+        this.mailService.sendPropertyApprovalAlert(vendor.email, vendor.name, property.title).catch(e => {
+            this.logger.error('Failed to send async property approval email', e);
+        });
+      }
+    } catch (error) {
+      this.logger.error('Failed to lookup vendor for property approval email', error);
+    }
+    
     return property;
   }
 }
