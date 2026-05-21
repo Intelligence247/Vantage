@@ -120,7 +120,10 @@ export const propertyService = {
     /**
      * Update a property (Admin or Owner)
      */
-    async updateProperty(propertyId: string, propertyData: Partial<Property>): Promise<Property> {
+    async updateProperty(
+        propertyId: string,
+        propertyData: Partial<Property> & { clearMapLocation?: boolean },
+    ): Promise<Property> {
         const response: BackendResponse<Property> = await apiClient.put(`/properties/${propertyId}`, propertyData);
         return response.data;
     },

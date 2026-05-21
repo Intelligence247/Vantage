@@ -1,7 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -28,6 +29,9 @@ import {
   Waves,
   TreePine,
   ShieldCheck,
+  Map,
+  Maximize2,
+  ExternalLink,
 } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
@@ -37,6 +41,27 @@ import { inquiryService } from "@/services/inquiry.service"
 import { paymentService } from "@/services/payment.service"
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "sonner"
+import { getPropertyMapCoords, googleMapsUrl } from "@/lib/property-map-coords"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+const PropertyLocationPreview = dynamic(
+  () =>
+    import("@/components/property-location-preview").then((m) => m.PropertyLocationPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-64 w-full items-center justify-center rounded-xl border border-border bg-muted/40 text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  },
+)
 
 const amenityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   "Smart Home Automation": Zap,
@@ -64,6 +89,7 @@ export default function PropertyDetailPage() {
   const [isInitializingPayment, setIsInitializingPayment] = useState(false)
   const [property, setProperty] = useState<Property | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [mapDialogOpen, setMapDialogOpen] = useState(false)
 
   useEffect(() => {
     const fetchProperty = async () => {
@@ -169,6 +195,14 @@ export default function PropertyDetailPage() {
     return `₦${(price / 1000000).toFixed(0)}M`
   }
 
+  const mapCoords = property ? getPropertyMapCoords(property) : null
+  const googleMapsHref =
+    mapCoords != null ? googleMapsUrl(mapCoords.latitude, mapCoords.longitude) : ""
+
+  const scrollToMap = useCallback(() => {
+    document.getElementById("property-map")?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [])
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center pt-20">
@@ -253,6 +287,17 @@ export default function PropertyDetailPage() {
 
                 {/* Action Buttons */}
                 <div className="absolute top-4 right-4 flex gap-2">
+                  {mapCoords && (
+                    <button
+                      type="button"
+                      onClick={scrollToMap}
+                      className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
+                      aria-label="Jump to map"
+                      title="Show on map"
+                    >
+                      <Map className="w-5 h-5 text-primary" />
+                    </button>
+                  )}
                   <button
                     onClick={handleToggleFavorite}
                     className="w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
@@ -280,7 +325,7 @@ export default function PropertyDetailPage() {
                   <button
                     key={index}
                     onClick={() => setCurrentImageIndex(index)}
-                    className={`relative w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 transition-all ${
+                    className={`relative w-24 h-16 rounded-lg overflow-hidden shrink-0 transition-all ${
                       currentImageIndex === index ? "ring-2 ring-accent ring-offset-2" : "opacity-70 hover:opacity-100"
                     }`}
                   >
@@ -332,6 +377,84 @@ export default function PropertyDetailPage() {
                     </div>
                   ))}
                 </motion.div>
+
+                {/* Map — shown when listing has coordinates; gallery “map” icon scrolls here */}
+                {mapCoords && (
+                  <>
+                    <motion.section
+                      id="property-map"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.15 }}
+                      className="bg-white rounded-xl p-6 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] scroll-mt-24"
+                      aria-label="Property location map"
+                    >
+                      <h2 className="font-heading text-xl font-bold text-primary mb-4 flex items-center gap-2">
+                        <Map className="w-5 h-5 text-accent" />
+                        Location
+                      </h2>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Pin shows the listing position (OpenStreetMap). © OpenStreetMap contributors.
+                      </p>
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMapDialogOpen(true)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+                        >
+                          <Maximize2 className="h-4 w-4 shrink-0" aria-hidden />
+                          View full map
+                        </button>
+                        <a
+                          href={googleMapsHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-accent-hover"
+                        >
+                          <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                          Open in Google Maps
+                        </a>
+                      </div>
+                      <PropertyLocationPreview
+                        latitude={mapCoords.latitude}
+                        longitude={mapCoords.longitude}
+                        className="relative h-64 w-full overflow-hidden rounded-xl border border-border bg-muted"
+                      />
+                    </motion.section>
+
+                    <Dialog open={mapDialogOpen} onOpenChange={setMapDialogOpen}>
+                      <DialogContent
+                        showCloseButton
+                        className="max-w-[calc(100%-2rem)] gap-4 p-4 sm:max-w-[min(96vw,56rem)] sm:p-6"
+                      >
+                        <DialogHeader>
+                          <DialogTitle className="font-heading">Property location</DialogTitle>
+                          <DialogDescription>
+                            Pan and zoom the map. Use “Open in Google Maps” for directions or Street View in the Google
+                            app.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <PropertyLocationPreview
+                          latitude={mapCoords.latitude}
+                          longitude={mapCoords.longitude}
+                          scrollWheelZoom
+                          className="relative h-[min(70vh,640px)] w-full overflow-hidden rounded-xl border border-border bg-muted"
+                        />
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <a
+                            href={googleMapsHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-accent-hover"
+                          >
+                            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                            Open in Google Maps
+                          </a>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </>
+                )}
 
                 {/* Description */}
                 <motion.div

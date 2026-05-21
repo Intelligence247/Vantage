@@ -2,6 +2,7 @@
 
 import type React from "react"
 
+import dynamic from "next/dynamic"
 import { useState, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -16,12 +17,14 @@ import {
   Home,
   Building2,
   MapPin,
+  Crosshair,
   DollarSign,
   Bed,
   Bath,
   Maximize,
   Car,
   ImageIcon,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +33,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+
+const PropertyLocationPreview = dynamic(
+  () =>
+    import("@/components/property-location-preview").then((m) => m.PropertyLocationPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-56 w-full max-w-2xl items-center justify-center rounded-xl border border-dashed border-border bg-muted/50 text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  },
+)
 
 const propertyTypes = [
   { value: "sale", label: "Sale", icon: Home },
@@ -72,6 +88,9 @@ export default function NewPropertyPage() {
   const [city, setCity] = useState("")
   const [area, setArea] = useState("")
   const [state, setState] = useState("lagos")
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
+  const [isLocating, setIsLocating] = useState(false)
   // Pricing
   const [price, setPrice] = useState("")
   const [paymentPeriod, setPaymentPeriod] = useState("yearly")
@@ -106,6 +125,33 @@ export default function NewPropertyPage() {
     setSelectedAmenities((prev) => (prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]))
   }
 
+  const handleUseMyLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      toast.error("Geolocation is not supported in this browser.")
+      return
+    }
+    setIsLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude)
+        setLongitude(pos.coords.longitude)
+        setIsLocating(false)
+        toast.success("Location captured — it will be saved with this listing.")
+      },
+      (err) => {
+        setIsLocating(false)
+        toast.error(err.message || "Could not read your location. Check permissions and try again.")
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    )
+  }
+
+  const handleClearLocation = () => {
+    setLatitude(null)
+    setLongitude(null)
+    toast.message("Map pin cleared")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !description || !price || !type || !propertyKind || !state) {
@@ -124,23 +170,27 @@ export default function NewPropertyPage() {
         toast.success("Images uploaded successfully!", { id: "upload" })
       }
 
-      const payload = {
-          title,
-          description,
-          price: Number(price),
-          type,
-          propertyKind,
-          address,
-          city,
-          area,
-          state,
-          beds: beds ? Number(beds) : undefined,
-          baths: baths ? Number(baths) : undefined,
-          sqft: sqft ? Number(sqft) : undefined,
-          parking: parking ? Number(parking) : undefined,
-          paymentPeriod: paymentPeriod || undefined,
-          features: selectedAmenities,
-          images: uploadedImagesUrls,
+      const payload: Record<string, unknown> = {
+        title,
+        description,
+        price: Number(price),
+        type,
+        propertyKind,
+        address,
+        city,
+        area,
+        state,
+        beds: beds ? Number(beds) : undefined,
+        baths: baths ? Number(baths) : undefined,
+        sqft: sqft ? Number(sqft) : undefined,
+        parking: parking ? Number(parking) : undefined,
+        paymentPeriod: paymentPeriod || undefined,
+        features: selectedAmenities,
+        images: uploadedImagesUrls,
+      }
+      if (latitude != null && longitude != null) {
+        payload.latitude = latitude
+        payload.longitude = longitude
       }
 
       toast.loading("Creating property...", { id: "create" })
@@ -163,7 +213,7 @@ export default function NewPropertyPage() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <Link
-          href="/dashboard/properties"
+          href="/dashboard/vendor/properties"
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -251,6 +301,43 @@ export default function NewPropertyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Map coordinates</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
+                    Use your device GPS so buyers can see this listing on a map later. You can skip this and add it when editing the property if needed.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleUseMyLocation}
+                    disabled={isLocating}
+                  >
+                    {isLocating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Crosshair className="h-4 w-4" />
+                    )}
+                    Use my location
+                  </Button>
+                  {(latitude != null || longitude != null) && (
+                    <Button type="button" variant="ghost" size="sm" onClick={handleClearLocation}>
+                      Clear pin
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {latitude != null && longitude != null && (
+                <>
+                  <p className="text-xs font-mono text-muted-foreground">
+                    Latitude {latitude.toFixed(6)}, longitude {longitude.toFixed(6)}
+                  </p>
+                  <PropertyLocationPreview latitude={latitude} longitude={longitude} />
+                </>
+              )}
               <div>
                 <Label htmlFor="address">Street Address</Label>
                 <Input id="address" placeholder="e.g., 15 Admiralty Way" className="mt-1.5" value={address} onChange={e => setAddress(e.target.value)} />
@@ -436,7 +523,7 @@ export default function NewPropertyPage() {
 
           {/* Submit */}
           <div className="flex items-center justify-end gap-4 pt-4">
-            <Link href="/dashboard/properties">
+            <Link href="/dashboard/vendor/properties">
               <Button variant="outline" type="button">
                 Cancel
               </Button>

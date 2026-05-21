@@ -1,10 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Types } from 'mongoose';
 import { PropertiesService } from './properties.service';
 import { PropertiesRepository } from './repository/properties.repository';
 import { PropertyType } from './schema/property.schema';
 import { MailService } from '../mail/mail.service';
 import { UsersService } from '../users/users.service';
+
+/** Same hex string Mongo uses for JWT `sub` when comparing ownership */
+const OWNER_AGENT_ID = new Types.ObjectId('507f1f77bcf86cd799439011').toHexString();
+const OTHER_AGENT_ID = new Types.ObjectId('507f1f77bcf86cd799439012').toHexString();
 
 const mockPropertiesRepository = {
   create: jest.fn(),
@@ -47,7 +53,7 @@ describe('PropertiesService', () => {
         { provide: PropertiesRepository, useValue: mockPropertiesRepository },
         { provide: MailService, useValue: mockMailService },
         { provide: UsersService, useValue: mockUsersService },
-        { provide: 'winston', useValue: mockLogger },
+        { provide: WINSTON_MODULE_PROVIDER, useValue: mockLogger },
       ],
     }).compile();
 
@@ -82,6 +88,39 @@ describe('PropertiesService', () => {
 
       expect(result.id).toBe('prop-id-1');
       expect(mockPropertiesRepository.create).toHaveBeenCalled();
+    });
+
+    it('should persist GeoJSON location from latitude and longitude', async () => {
+      const mockProperty = { id: 'prop-geo', title: 'Geo', type: PropertyType.SALE };
+      mockPropertiesRepository.create.mockResolvedValue(mockProperty);
+
+      await service.create('agent-1', {
+        title: 'Geo listing',
+        description: 'Enough chars for validation rules here yes',
+        price: 5000000,
+        type: PropertyType.SALE,
+        features: [],
+        images: [],
+        is360: false,
+        nearbyPlaces: [],
+        latitude: 6.5244,
+        longitude: 3.3792,
+      });
+
+      expect(mockPropertiesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          location: {
+            type: 'Point',
+            coordinates: [3.3792, 6.5244],
+          },
+        }),
+      );
+      const callArg = mockPropertiesRepository.create.mock.calls[0][0] as Record<
+        string,
+        unknown
+      >;
+      expect(callArg.latitude).toBeUndefined();
+      expect(callArg.longitude).toBeUndefined();
     });
   });
 
@@ -162,14 +201,35 @@ describe('PropertiesService', () => {
     it('should update property by owner', async () => {
       mockPropertiesRepository.findById.mockResolvedValue({
         id: 'prop-id-1',
-        agent: { toString: () => 'agent-id-1' },
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
       });
       mockPropertiesRepository.update.mockResolvedValue({
         id: 'prop-id-1',
         title: 'Updated',
       });
 
-      const result = await service.update('prop-id-1', 'agent-id-1', {
+      const result = await service.update('prop-id-1', OWNER_AGENT_ID, {
+        title: 'Updated',
+      });
+
+      expect(result.title).toBe('Updated');
+    });
+
+    it('should treat populated agent User as owner when _id matches JWT sub', async () => {
+      mockPropertiesRepository.findById.mockResolvedValue({
+        id: 'prop-id-1',
+        agent: {
+          _id: new Types.ObjectId(OWNER_AGENT_ID),
+          name: 'Listed By Me',
+          email: 'me@example.com',
+        },
+      });
+      mockPropertiesRepository.update.mockResolvedValue({
+        id: 'prop-id-1',
+        title: 'Updated',
+      });
+
+      const result = await service.update('prop-id-1', OWNER_AGENT_ID, {
         title: 'Updated',
       });
 
@@ -179,18 +239,18 @@ describe('PropertiesService', () => {
     it('should throw ForbiddenException for non-owner', async () => {
       mockPropertiesRepository.findById.mockResolvedValue({
         id: 'prop-id-1',
-        agent: { toString: () => 'agent-id-1' },
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
       });
 
       await expect(
-        service.update('prop-id-1', 'different-agent', { title: 'Updated' }),
+        service.update('prop-id-1', OTHER_AGENT_ID, { title: 'Updated' }),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('should allow admin to update any property', async () => {
       mockPropertiesRepository.findById.mockResolvedValue({
         id: 'prop-id-1',
-        agent: { toString: () => 'agent-id-1' },
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
       });
       mockPropertiesRepository.update.mockResolvedValue({
         id: 'prop-id-1',
@@ -206,29 +266,53 @@ describe('PropertiesService', () => {
 
       expect(result.title).toBe('Admin Updated');
     });
+
+    it('should $unset location when clearMapLocation is true and no new coordinates are sent', async () => {
+      mockPropertiesRepository.findById.mockResolvedValue({
+        id: 'prop-id-1',
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
+      });
+      mockPropertiesRepository.update.mockResolvedValue({
+        id: 'prop-id-1',
+        title: 'Only text',
+      });
+
+      await service.update('prop-id-1', OWNER_AGENT_ID, {
+        title: 'Only text',
+        clearMapLocation: true,
+      } as Parameters<typeof service.update>[2]);
+
+      expect(mockPropertiesRepository.update).toHaveBeenCalledWith(
+        'prop-id-1',
+        expect.objectContaining({
+          $unset: { location: 1 },
+          $set: expect.objectContaining({ title: 'Only text' }),
+        }),
+      );
+    });
   });
 
   describe('delete', () => {
     it('should delete property by owner', async () => {
       mockPropertiesRepository.findById.mockResolvedValue({
         id: 'prop-id-1',
-        agent: { toString: () => 'agent-id-1' },
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
       });
       mockPropertiesRepository.delete.mockResolvedValue(undefined);
 
       await expect(
-        service.delete('prop-id-1', 'agent-id-1'),
+        service.delete('prop-id-1', OWNER_AGENT_ID),
       ).resolves.toBeUndefined();
     });
 
     it('should throw ForbiddenException for non-owner', async () => {
       mockPropertiesRepository.findById.mockResolvedValue({
         id: 'prop-id-1',
-        agent: { toString: () => 'agent-id-1' },
+        agent: new Types.ObjectId(OWNER_AGENT_ID),
       });
 
       await expect(
-        service.delete('prop-id-1', 'different-agent'),
+        service.delete('prop-id-1', OTHER_AGENT_ID),
       ).rejects.toThrow(ForbiddenException);
     });
   });

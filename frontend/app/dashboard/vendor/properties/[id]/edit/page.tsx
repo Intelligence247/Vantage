@@ -2,12 +2,14 @@
 
 import type React from "react"
 
+import dynamic from "next/dynamic"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import { propertyService, Property } from "@/services/property.service"
+import { propertyService } from "@/services/property.service"
+import { getPropertyMapCoords, googleMapsUrl } from "@/lib/property-map-coords"
 import {
   ArrowLeft,
   Upload,
@@ -16,6 +18,7 @@ import {
   Home,
   Building2,
   MapPin,
+  Crosshair,
   DollarSign,
   Bed,
   Bath,
@@ -23,6 +26,8 @@ import {
   Car,
   ImageIcon,
   Pencil,
+  Loader2,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +36,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+
+const PropertyLocationPreview = dynamic(
+  () =>
+    import("@/components/property-location-preview").then((m) => m.PropertyLocationPreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-56 w-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/50 text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  },
+)
 
 const propertyTypes = [
   { value: "sale", label: "Sale", icon: Home },
@@ -77,6 +95,11 @@ export default function EditPropertyPage() {
   const [city, setCity] = useState("")
   const [area, setArea] = useState("")
   const [state, setState] = useState("lagos")
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
+  const [initialCoordsExisted, setInitialCoordsExisted] = useState(false)
+  const [mapPinCleared, setMapPinCleared] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
   // Pricing
   const [price, setPrice] = useState("")
   const [paymentPeriod, setPaymentPeriod] = useState("yearly")
@@ -113,7 +136,13 @@ export default function EditPropertyPage() {
             setSqft(data.sqft?.toString() || "")
             setParking(data.parking?.toString() || "")
             setSelectedAmenities(data.features || [])
-            
+
+            const coords = getPropertyMapCoords(data)
+            setInitialCoordsExisted(coords != null)
+            setLatitude(coords?.latitude ?? null)
+            setLongitude(coords?.longitude ?? null)
+            setMapPinCleared(false)
+
             if (data.images) {
                 const initialImages = data.images.map((img: any) => ({
                     preview: img.url,
@@ -148,6 +177,41 @@ export default function EditPropertyPage() {
     setSelectedAmenities((prev) => (prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]))
   }
 
+  const handleUseMyLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      toast.error("Geolocation is not supported in this browser.")
+      return
+    }
+    setIsLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude)
+        setLongitude(pos.coords.longitude)
+        setMapPinCleared(false)
+        setIsLocating(false)
+        toast.success("Location updated — save changes to apply on the listing.")
+      },
+      (err) => {
+        setIsLocating(false)
+        toast.error(err.message || "Could not read your location. Check permissions and try again.")
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+    )
+  }
+
+  const handleClearLocation = () => {
+    setLatitude(null)
+    setLongitude(null)
+    setMapPinCleared(true)
+    toast.message("Pin removed from the form — save to update the listing.")
+  }
+
+  const handleMarkerDrag = (lat: number, lng: number) => {
+    setLatitude(lat)
+    setLongitude(lng)
+    setMapPinCleared(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !description || !price || !type || !propertyKind || !state) {
@@ -171,7 +235,7 @@ export default function EditPropertyPage() {
         uploadedImagesUrls = existingImages
       }
 
-      const payload = {
+      const payload: Parameters<typeof propertyService.updateProperty>[1] = {
           title,
           description,
           price: Number(price),
@@ -188,6 +252,12 @@ export default function EditPropertyPage() {
           paymentPeriod: paymentPeriod || undefined,
           features: selectedAmenities,
           images: uploadedImagesUrls,
+      }
+      if (latitude != null && longitude != null) {
+        payload.latitude = latitude
+        payload.longitude = longitude
+      } else if (mapPinCleared && initialCoordsExisted) {
+        payload.clearMapLocation = true
       }
 
       toast.loading("Updating property...", { id: "update" })
@@ -218,7 +288,7 @@ export default function EditPropertyPage() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
         <Link
-          href="/dashboard/properties"
+          href="/dashboard/vendor/properties"
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -306,6 +376,67 @@ export default function EditPropertyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Map pin</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
+                    Drag the pin to fine-tune, use GPS to reset, or clear to remove the map from this listing. Save when
+                    you are done.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleUseMyLocation}
+                    disabled={isLocating}
+                  >
+                    {isLocating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Crosshair className="h-4 w-4" />
+                    )}
+                    Use my location
+                  </Button>
+                  {(latitude != null || longitude != null) && (
+                    <Button type="button" variant="ghost" size="sm" onClick={handleClearLocation}>
+                      Clear pin
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {latitude == null && longitude == null && (
+                <p className="text-xs text-muted-foreground rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2">
+                  No map pin yet. Use your location to add one, or leave blank if you prefer not to show a map.
+                </p>
+              )}
+              {latitude != null && longitude != null && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                    </p>
+                    <a
+                      href={googleMapsUrl(latitude, longitude)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      Check in Google Maps
+                    </a>
+                  </div>
+                  <PropertyLocationPreview
+                    latitude={latitude}
+                    longitude={longitude}
+                    draggableMarker
+                    stableMapKey={`edit-loc-${propertyId}`}
+                    onCoordinatesChange={handleMarkerDrag}
+                    className="relative h-64 w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-muted"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="address">Street Address</Label>
                 <Input id="address" placeholder="e.g., 15 Admiralty Way" className="mt-1.5" value={address} onChange={e => setAddress(e.target.value)} />
@@ -501,7 +632,7 @@ export default function EditPropertyPage() {
 
           {/* Submit */}
           <div className="flex items-center justify-end gap-4 pt-4">
-            <Link href="/dashboard/properties">
+            <Link href="/dashboard/vendor/properties">
               <Button variant="outline" type="button">
                 Cancel
               </Button>

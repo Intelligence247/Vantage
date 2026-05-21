@@ -6,7 +6,7 @@ type RefreshResponse = {
 };
 
 export const apiClient = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api',
+    baseURL: process.env.NEXT_PUBLIC_API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -54,7 +54,7 @@ apiClient.interceptors.response.use(
                 }
 
                 const refreshBaseUrl =
-                    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+                    process.env.NEXT_PUBLIC_API_URL;
 
                 const refreshResponse = await axios.post(
                     `${refreshBaseUrl}/auth/refresh`,

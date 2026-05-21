@@ -16,6 +16,11 @@ import {
 import { Property, PropertyStatus } from './schema/property.schema';
 import { MailService } from '../mail/mail.service';
 import { UsersService } from '../users/users.service';
+import {
+  normalizePropertyLocationFields,
+  isLocationPayloadTouched,
+} from './utils/property-location.util';
+import { agentRefToUserId } from './utils/property-agent.util';
 
 @Injectable()
 export class PropertiesService {
@@ -30,11 +35,15 @@ export class PropertiesService {
     agentId: string,
     input: CreatePropertyInput,
   ): Promise<PropertyDocument> {
+    const payload = normalizePropertyLocationFields({
+      ...(input as unknown as Record<string, unknown>),
+    }) as Record<string, unknown>;
+
     const property = await this.propertiesRepository.create({
-      ...input,
+      ...payload,
       status: PropertyStatus.PENDING, // Strictly enforce pending state for Admin review
       agent: agentId as unknown as Property['agent'],
-    });
+    } as Partial<Property>);
 
     this.logger.info('Property created (Pending Review)', {
       propertyId: property.id,
@@ -132,13 +141,29 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    if (!isAdmin && property.agent?.toString() !== agentId) {
+    const ownerId = agentRefToUserId(property.agent);
+    if (!isAdmin && ownerId !== agentId) {
       throw new ForbiddenException(
         'You can only update your own properties',
       );
     }
 
-    const updated = await this.propertiesRepository.update(id, input);
+    const { clearMapLocation, ...inputRest } = input as typeof input & {
+      clearMapLocation?: boolean;
+    };
+    const flat = { ...(inputRest as unknown as Record<string, unknown>) };
+
+    let payload: Record<string, unknown>;
+    if (isLocationPayloadTouched(flat)) {
+      payload = normalizePropertyLocationFields(flat);
+    } else if (clearMapLocation === true) {
+      const { latitude: _la, longitude: _lo, location: _loc, ...rest } = flat;
+      payload = { $set: rest, $unset: { location: 1 } };
+    } else {
+      payload = flat;
+    }
+
+    const updated = await this.propertiesRepository.update(id, payload);
     if (!updated) {
       throw new NotFoundException('Property not found');
     }
@@ -156,7 +181,8 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    if (!isAdmin && property.agent?.toString() !== agentId) {
+    const ownerId = agentRefToUserId(property.agent);
+    if (!isAdmin && ownerId !== agentId) {
       throw new ForbiddenException(
         'You can only delete your own properties',
       );

@@ -9,7 +9,21 @@ import {
 
 export { PropertyType, PropertyCategory, PropertyKind, PropertyStatus };
 
-export const createPropertySchema = z.object({
+/** GeoJSON Point: coordinates are [longitude, latitude] (RFC 7946 / MongoDB 2dsphere). */
+const geoPointSchema = z
+  .object({
+    type: z.literal('Point').optional(),
+    coordinates: z.tuple([
+      z.number().min(-180).max(180),
+      z.number().min(-90).max(90),
+    ]),
+  })
+  .transform((data) => ({
+    type: 'Point' as const,
+    coordinates: data.coordinates,
+  }));
+
+const createPropertyBaseSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200),
   description: z
     .string()
@@ -31,12 +45,12 @@ export const createPropertySchema = z.object({
   parking: z.number().int().min(0).optional(),
   yearBuilt: z.number().int().min(1800).max(2030).optional(),
   paymentPeriod: z.string().optional(),
-  location: z
-    .object({
-      type: z.literal('Point').optional().default('Point'),
-      coordinates: z.tuple([z.number(), z.number()]),
-    })
-    .optional(),
+  /** GeoJSON Point — prefer sending `latitude` + `longitude` from the browser unless you already use GeoJSON. */
+  location: geoPointSchema.optional(),
+  /** WGS-84 latitude; must be sent together with `longitude` (exclusive with `location`). */
+  latitude: z.number().min(-90).max(90).optional(),
+  /** WGS-84 longitude; must be sent together with `latitude` (exclusive with `location`). */
+  longitude: z.number().min(-180).max(180).optional(),
   nearbyPlaces: z
     .array(
       z.object({
@@ -56,6 +70,51 @@ export const createPropertySchema = z.object({
     .optional()
     .default([]),
 });
+
+function refineLocationExclusivity(
+  data: {
+    location?: { type: string; coordinates: [number, number] };
+    latitude?: number;
+    longitude?: number;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const hasLocation =
+    data.location != null &&
+    Array.isArray(data.location.coordinates) &&
+    data.location.coordinates.length === 2;
+  const hasLat = data.latitude !== undefined;
+  const hasLng = data.longitude !== undefined;
+
+  if (hasLat !== hasLng) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'Provide both latitude and longitude (WGS-84), or use location (GeoJSON Point with [lng, lat]).',
+      path: hasLat ? ['longitude'] : ['latitude'],
+    });
+  }
+  if (hasLocation && (hasLat || hasLng)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'Use either location (GeoJSON) or latitude/longitude, not both.',
+      path: ['location'],
+    });
+  }
+}
+
+export const createPropertySchema = createPropertyBaseSchema.superRefine(
+  refineLocationExclusivity,
+);
+
+export const updatePropertySchema = createPropertyBaseSchema
+  .partial()
+  .extend({
+    /** When true (and no new latitude/longitude/location is sent), removes stored map coordinates. */
+    clearMapLocation: z.boolean().optional(),
+  })
+  .superRefine(refineLocationExclusivity);
 
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
 
@@ -115,17 +174,42 @@ export class CreatePropertyDto {
   paymentPeriod?: string;
 
   @ApiPropertyOptional({
+    description:
+      'GeoJSON Point. coordinates: [longitude, latitude]. Omit if using latitude/longitude instead.',
+    example: { type: 'Point', coordinates: [3.3792, 6.5244] },
+  })
+  location?: { type: 'Point'; coordinates: [number, number] };
+
+  @ApiPropertyOptional({
+    description:
+      'WGS-84 latitude (e.g. from navigator.geolocation). Send together with longitude; do not send `location` at the same time.',
+    example: 6.5244,
+  })
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'WGS-84 longitude. Send together with latitude; do not send `location` at the same time.',
+    example: 3.3792,
+  })
+  longitude?: number;
+
+  @ApiPropertyOptional({
     type: [Object],
     example: [{ url: 'https://res.cloudinary.com/...', publicId: 'abc123_xyz' }],
   })
   images?: { url: string; publicId: string }[];
 }
 
-export const updatePropertySchema = createPropertySchema.partial();
-
 export type UpdatePropertyInput = z.infer<typeof updatePropertySchema>;
 
-export class UpdatePropertyDto extends CreatePropertyDto {}
+export class UpdatePropertyDto extends CreatePropertyDto {
+  @ApiPropertyOptional({
+    description:
+      'When true and the body does not include latitude, longitude, or location, removes the stored map pin.',
+  })
+  clearMapLocation?: boolean;
+}
 
 export const propertyQuerySchema = z.object({
   page: z.string().optional().default('1'),
